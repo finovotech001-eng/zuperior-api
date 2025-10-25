@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
-from core.database import get_db
-from api.deps import get_current_active_user
-from schemas.schemas import (
+from app.core.database import get_db
+from app.api.deps import get_current_active_user
+from app.schemas.schemas import (
     DepositResponse,
     DepositCreate,
     DepositUpdate,
     PaginatedResponse
 )
-from crud.crud import deposit_crud, mt5_account_crud
-from models.models import User
+from app.crud.crud import deposit_crud, mt5_account_crud
+from app.models.models import User
 
 router = APIRouter()
 

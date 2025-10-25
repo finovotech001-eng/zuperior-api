@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
-from core.database import engine, Base
-from api import auth
-from api.endpoints import (
+from app.core.config import settings
+from app.core.database import engine, Base
+from app.api import auth
+from app.api.endpoints import (
     users,
     mt5_accounts,
     mt5_transactions,

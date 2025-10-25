@@ -3,7 +3,7 @@ Role-Based Access Control (RBAC) Middleware
 """
 from functools import wraps
 from fastapi import HTTPException, status
-from models.models import User
+from app.models.models import User
 
 
 class RBACMiddleware:

@@ -2,7 +2,7 @@ from typing import Generic, TypeVar, Type, Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, asc, desc
 from pydantic import BaseModel
-from core.database import Base
+from app.core.database import Base
 import math
 
 ModelType = TypeVar("ModelType", bound=Base)
@@ -124,11 +124,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
 
 # Import models
-from models.models import (
+from app.models.models import (
     User, KYC, MT5Account, MT5Transaction, 
     Deposit, Withdrawal, PaymentMethod
 )
-from schemas.schemas import (
+from app.schemas.schemas import (
     UserCreate, UserUpdate,
     KYCCreate, KYCUpdate,
     MT5AccountCreate, MT5AccountUpdate,
