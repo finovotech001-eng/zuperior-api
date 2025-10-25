@@ -1,0 +1,712 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CRM API",
+    "description": "A comprehensive CRM API for managing users, MT5 trading accounts, deposits, withdrawals, and KYC verification",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@example.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://your-app.onrender.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check if the API is running",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "healthy" },
+                    "service": { "type": "string", "example": "CRM API" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": ["System"]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Register New User",
+        "description": "Create a new user account",
+        "operationId": "register_user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Email already registered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/auth/login/json": {
+      "post": {
+        "summary": "Login with JSON",
+        "description": "Authenticate user and receive JWT tokens",
+        "operationId": "login_json",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserLogin" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Token" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "summary": "Refresh Access Token",
+        "description": "Get a new access token using refresh token",
+        "operationId": "refresh_token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TokenRefresh" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Token" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "description": "Revoke refresh token and logout user",
+        "operationId": "logout",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TokenRefresh" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Successfully logged out" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": ["Authentication"]
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "summary": "Get Current User",
+        "description": "Get currently authenticated user's profile",
+        "operationId": "get_current_user",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["Users"]
+      },
+      "put": {
+        "summary": "Update Current User",
+        "description": "Update current user's profile",
+        "operationId": "update_current_user",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["Users"]
+      }
+    },
+    "/api/mt5-accounts/": {
+      "get": {
+        "summary": "List MT5 Accounts",
+        "description": "Get all MT5 accounts for current user with pagination",
+        "operationId": "list_mt5_accounts",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["asc", "desc"], "default": "desc" }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MT5 accounts retrieved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaginatedMT5AccountResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["MT5 Accounts"]
+      },
+      "post": {
+        "summary": "Create MT5 Account",
+        "description": "Create a new MT5 trading account",
+        "operationId": "create_mt5_account",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MT5AccountCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "MT5 account created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MT5AccountResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Account ID already exists",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["MT5 Accounts"]
+      }
+    },
+    "/api/mt5-accounts/{account_id}": {
+      "get": {
+        "summary": "Get MT5 Account",
+        "description": "Get a specific MT5 account by ID",
+        "operationId": "get_mt5_account",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MT5 account retrieved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MT5AccountResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["MT5 Accounts"]
+      },
+      "put": {
+        "summary": "Update MT5 Account",
+        "description": "Update an existing MT5 account",
+        "operationId": "update_mt5_account",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MT5AccountUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MT5 account updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MT5AccountResponse" }
+              }
+            }
+          }
+        },
+        "tags": ["MT5 Accounts"]
+      },
+      "delete": {
+        "summary": "Delete MT5 Account",
+        "description": "Delete an MT5 account",
+        "operationId": "delete_mt5_account",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "MT5 account deleted"
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "tags": ["MT5 Accounts"]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT access token obtained from login endpoint"
+      }
+    },
+    "schemas": {
+      "UserCreate": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "example": "SecurePass123"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "John Doe"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "example": "+1234567890"
+          },
+          "country": {
+            "type": "string",
+            "nullable": true,
+            "example": "United States"
+          },
+          "role": {
+            "type": "string",
+            "default": "user",
+            "example": "user"
+          }
+        }
+      },
+      "UserUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "clientId": {
+            "type": "string",
+            "example": "c1a2b3c4d5e6f7g8h9i0j1k2"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "lastLoginAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "UserLogin": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "SecurePass123"
+          }
+        }
+      },
+      "Token": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refresh_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "token_type": {
+            "type": "string",
+            "default": "bearer",
+            "example": "bearer"
+          }
+        }
+      },
+      "TokenRefresh": {
+        "type": "object",
+        "required": ["refresh_token"],
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          }
+        }
+      },
+      "MT5AccountCreate": {
+        "type": "object",
+        "required": ["accountId"],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "example": "MT5-12345678",
+            "description": "Unique MT5 account identifier"
+          },
+          "password": {
+            "type": "string",
+            "nullable": true,
+            "example": "TradingPass123",
+            "description": "MT5 account password"
+          },
+          "leverage": {
+            "type": "integer",
+            "nullable": true,
+            "example": 100,
+            "description": "Account leverage (e.g., 100 = 1:100)"
+          }
+        }
+      },
+      "MT5AccountUpdate": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "leverage": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "MT5AccountResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "leverage": {
+            "type": "integer",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PaginatedMT5AccountResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MT5AccountResponse" }
+          },
+          "total": {
+            "type": "integer",
+            "example": 50
+          },
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "example": 20
+          },
+          "total_pages": {
+            "type": "integer",
+            "example": 3
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "object" } }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "System health and status endpoints"
+    },
+    {
+      "name": "Authentication",
+      "description": "User authentication and token management"
+    },
+    {
+      "name": "Users",
+      "description": "User profile management"
+    },
+    {
+      "name": "MT5 Accounts",
+      "description": "MT5 trading account management with password and leverage support"
+    },
+    {
+      "name": "Deposits",
+      "description": "Deposit request management"
+    },
+    {
+      "name": "Withdrawals",
+      "description": "Withdrawal request management"
+    },
+    {
+      "name": "Payment Methods",
+      "description": "User payment method management"
+    },
+    {
+      "name": "MT5 Transactions",
+      "description": "MT5 transaction history"
+    },
+    {
+      "name": "KYC",
+      "description": "KYC verification management"
+    }
+  ]
+}
+
