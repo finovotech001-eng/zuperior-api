@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
+import logging
 from passlib.context import CryptContext
 from .config import settings
+
+# Silence passlib's noisy bcrypt version warning on import
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

@@ -1,4 +1,5 @@
 from typing import Generic, TypeVar, Type, Optional, List, Dict, Any
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, asc, desc
 from pydantic import BaseModel
@@ -89,6 +90,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """Create a new record"""
         obj_in_data = obj_in.model_dump() if hasattr(obj_in, 'model_dump') else obj_in.dict()
         obj_in_data.update(kwargs)
+        # Ensure timestamps for models that define them
+        if hasattr(self.model, 'createdAt') and not obj_in_data.get('createdAt'):
+            obj_in_data['createdAt'] = datetime.now(timezone.utc)
+        if hasattr(self.model, 'updatedAt') and not obj_in_data.get('updatedAt'):
+            obj_in_data['updatedAt'] = datetime.now(timezone.utc)
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
         db.commit()
@@ -108,7 +114,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         for field, value in obj_data.items():
             if hasattr(db_obj, field):
                 setattr(db_obj, field, value)
-        
+
+        # Auto-update updatedAt if model supports it
+        if hasattr(db_obj, 'updatedAt'):
+            setattr(db_obj, 'updatedAt', datetime.now(timezone.utc))
+
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
@@ -185,4 +195,3 @@ mt5_transaction_crud = MT5TransactionCRUD(MT5Transaction)
 deposit_crud = DepositCRUD(Deposit)
 withdrawal_crud = WithdrawalCRUD(Withdrawal)
 payment_method_crud = PaymentMethodCRUD(PaymentMethod)
-

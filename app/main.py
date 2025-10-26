@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -13,9 +14,13 @@ from app.api.endpoints import (
     payment_methods
 )
 
+# Suppress noisy passlib bcrypt version warning (harmless)
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
-
+print("DATABASE_URL:", settings.DATABASE_URL)
+print("SECRET_KEY:", settings.SECRET_KEY)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -115,4 +120,3 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
-
