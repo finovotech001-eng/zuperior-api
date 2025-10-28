@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api"
     PROJECT_NAME: str = "CRM API"
     BACKEND_CORS_ORIGINS: Union[str, List[str]] = ["*"]
+    
+    # SMTP Email Configuration
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SMTP_FROM: str = "Zuperior <noreply@zuperior.com>"
+    SMTP_SECURE: bool = False
+    CLIENT_URL: str = "https://dashboard.zuperior.com"
+    EMAIL_LOGO_URL: str = ""
 
     def model_post_init(self, __context):
         if isinstance(self.BACKEND_CORS_ORIGINS, str):
