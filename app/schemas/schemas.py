@@ -45,6 +45,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     country: Optional[str] = None
     email: Optional[EmailStr] = None
+    password: Optional[str] = Field(None, min_length=6)
 
 
 class UserResponse(UserBase):

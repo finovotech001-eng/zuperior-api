@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
+from app.core.security import get_password_hash
 from app.api.deps import get_current_active_user
 from app.schemas.schemas import UserResponse, UserUpdate
 from app.crud.crud import user_crud
@@ -28,6 +29,8 @@ def update_current_user_profile(
 ):
     """
     Update current user profile
+    Can update name, phone, country, email, and password.
+    For forgot password functionality, just send the password field.
     """
     # Check if email is being changed and if it already exists
     if user_update.email and user_update.email != current_user.email:
@@ -37,6 +40,13 @@ def update_current_user_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
+    
+    # Hash password if provided (for password update/forgot password)
+    update_dict = user_update.model_dump(exclude_unset=True)
+    if "password" in update_dict and update_dict["password"]:
+        update_dict["password"] = get_password_hash(update_dict["password"])
+        # Create UserUpdate object with hashed password
+        user_update = UserUpdate(**update_dict)
     
     updated_user = user_crud.update(db, db_obj=current_user, obj_in=user_update)
     return updated_user

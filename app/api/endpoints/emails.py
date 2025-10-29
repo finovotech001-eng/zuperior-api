@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from typing import Optional
-from datetime import datetime
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
 import random
 import logging
 from app.services.email_service import send_email_to
@@ -9,6 +9,10 @@ from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# In-memory OTP storage: {email: {"otp": str, "expires_at": datetime, "verified": bool}}
+otp_store: Dict[str, Dict[str, Any]] = {}
+OTP_EXPIRY_MINUTES = 10
 
 BRAND_PRIMARY = "#6242a5"
 BRAND_PRIMARY_ALT = "#9f8bcf"
@@ -60,12 +64,29 @@ class EmailResponse(BaseModel):
     success: bool
     message: str
 
+class OTPVerifyRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class OTPVerifyResponse(BaseModel):
+    success: bool
+    verified: bool
+    message: str
+
 @router.post("/send-otp", response_model=EmailResponse)
 def send_otp_email(request: OTPEmailRequest):
     try:
         otp = str(random.randint(100000, 999999))
         logo_url = get_logo_url()
         name = request.name or ""
+        
+        # Store OTP with expiration time (10 minutes from now)
+        expires_at = datetime.now() + timedelta(minutes=OTP_EXPIRY_MINUTES)
+        otp_store[request.email.lower()] = {
+            "otp": otp,
+            "expires_at": expires_at,
+            "verified": False
+        }
         
         text = f"Hi {name},\n\nUse the one-time code below to verify your email address.\n\n{otp}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this email, you can safely ignore it.\n\n- Team Zuperior\n"
         
@@ -76,6 +97,66 @@ def send_otp_email(request: OTPEmailRequest):
     except Exception as e:
         logger.error(f"Error sending OTP email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send email")
+
+@router.post("/verify-otp", response_model=OTPVerifyResponse)
+def verify_otp(request: OTPVerifyRequest):
+    """
+    Verify the OTP entered by the user.
+    Returns success: true and verified: true if OTP is correct and not expired.
+    """
+    try:
+        email_lower = request.email.lower()
+        
+        # Check if OTP exists for this email
+        if email_lower not in otp_store:
+            return OTPVerifyResponse(
+                success=False,
+                verified=False,
+                message="No OTP found for this email. Please request a new OTP."
+            )
+        
+        otp_data = otp_store[email_lower]
+        
+        # Check if OTP has expired
+        if datetime.now() > otp_data["expires_at"]:
+            # Remove expired OTP
+            del otp_store[email_lower]
+            return OTPVerifyResponse(
+                success=False,
+                verified=False,
+                message="OTP has expired. Please request a new OTP."
+            )
+        
+        # Check if OTP has already been verified
+        if otp_data["verified"]:
+            return OTPVerifyResponse(
+                success=False,
+                verified=False,
+                message="This OTP has already been used. Please request a new OTP."
+            )
+        
+        # Verify OTP
+        if otp_data["otp"] == request.otp:
+            # Mark as verified and remove from store (one-time use)
+            del otp_store[email_lower]
+            return OTPVerifyResponse(
+                success=True,
+                verified=True,
+                message="OTP verified successfully."
+            )
+        else:
+            return OTPVerifyResponse(
+                success=False,
+                verified=False,
+                message="Invalid OTP. Please check and try again."
+            )
+    
+    except Exception as e:
+        logger.error(f"Error verifying OTP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify OTP"
+        )
 
 @router.post("/send-mt5-account", response_model=EmailResponse)
 def send_mt5_account_email(request: MT5AccountEmailRequest):
