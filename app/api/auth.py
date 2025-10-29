@@ -72,9 +72,10 @@ def login(
         )
     
     if user.status != "active":
+        status_message = user.status if user.status else "Inactive"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not active"
+            detail=f"You are {status_message} user and not allowed please contact support."
         )
     
     # Update last login
@@ -130,9 +131,10 @@ def login_json(
         )
     
     if user.status != "active":
+        status_message = user.status if user.status else "Inactive"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not active"
+            detail=f"You are {status_message} user and not allowed please contact support."
         )
     
     # Update last login
