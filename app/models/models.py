@@ -31,12 +31,16 @@ class User(Base):
     status = Column(String, default="active", nullable=False, index=True)
     
     # Relationships
+    accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     mt5Accounts = relationship("MT5Account", back_populates="user", cascade="all, delete-orphan")
     deposits = relationship("Deposit", back_populates="user", cascade="all, delete-orphan")
     withdrawals = relationship("Withdrawal", back_populates="user", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     kyc = relationship("KYC", back_populates="user", uselist=False, cascade="all, delete-orphan")
     paymentMethods = relationship("PaymentMethod", back_populates="user", cascade="all, delete-orphan")
     refreshTokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    wallet = relationship("Wallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    walletTransactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_user_role_status', 'role', 'status'),
@@ -83,16 +87,18 @@ class MT5Account(Base):
     
     id = Column(String, primary_key=True, default=generate_uuid)
     accountId = Column(String, unique=True, nullable=False)
-    userId = Column(String, ForeignKey("User.id"), nullable=False, index=True)
+    userId = Column(String, ForeignKey("User.id"), nullable=True, index=True)
+    accountType = Column(String, default="Live", nullable=False)
     password = Column(String, nullable=True)
     leverage = Column(Integer, nullable=True)
+    nameOnAccount = Column(String, nullable=True)
+    package = Column(String, nullable=True)
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="mt5Accounts")
     deposits = relationship("Deposit", back_populates="mt5Account", cascade="all, delete-orphan")
-    withdrawals = relationship("Withdrawal", back_populates="mt5Account", cascade="all, delete-orphan")
     mt5Transactions = relationship("MT5Transaction", back_populates="mt5Account", cascade="all, delete-orphan")
 
 
@@ -148,6 +154,7 @@ class Deposit(Base):
     # Relationships
     user = relationship("User", back_populates="deposits")
     mt5Account = relationship("MT5Account", back_populates="deposits")
+    transactions = relationship("Transaction", back_populates="deposit")
 
 
 class Withdrawal(Base):
@@ -155,7 +162,6 @@ class Withdrawal(Base):
     
     id = Column(String, primary_key=True, default=generate_uuid)
     userId = Column(String, ForeignKey("User.id"), nullable=False, index=True)
-    mt5AccountId = Column(String, ForeignKey("MT5Account.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     method = Column(String, nullable=False)
     bankDetails = Column(Text, nullable=True)
@@ -172,10 +178,12 @@ class Withdrawal(Base):
     paymentMethod = Column(String, nullable=True)
     processedAt = Column(DateTime(timezone=True), nullable=True)
     walletAddress = Column(String, nullable=True)
+    walletId = Column(String, ForeignKey("Wallet.id"), nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="withdrawals")
-    mt5Account = relationship("MT5Account", back_populates="withdrawals")
+    wallet = relationship("Wallet", back_populates="withdrawals")
+    transactions = relationship("Transaction", back_populates="withdrawal")
 
 
 class PaymentMethod(Base):
@@ -196,4 +204,79 @@ class PaymentMethod(Base):
     
     # Relationships
     user = relationship("User", back_populates="paymentMethods")
+
+
+class Account(Base):
+    __tablename__ = "Account"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    userId = Column(String, ForeignKey("User.id"), nullable=False, index=True)
+    accountType = Column(String, nullable=False)
+    balance = Column(Float, default=0.0, nullable=False)
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="accounts")
+
+
+class Transaction(Base):
+    __tablename__ = "Transaction"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    userId = Column(String, ForeignKey("User.id"), nullable=False, index=True)
+    type = Column(String, nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    status = Column(String, default="pending", nullable=False, index=True)
+    currency = Column(String, default="USD", nullable=False)
+    paymentMethod = Column(String, nullable=True)
+    transactionId = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    metadata_json = Column("metadata", Text, nullable=True)  # Python attr 'metadata_json' maps to DB column 'metadata' to avoid SQLAlchemy reserved word conflict
+    depositId = Column(String, ForeignKey("Deposit.id"), nullable=True, index=True)
+    withdrawalId = Column(String, ForeignKey("Withdrawal.id"), nullable=True, index=True)
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="transactions")
+    deposit = relationship("Deposit", back_populates="transactions")
+    withdrawal = relationship("Withdrawal", back_populates="transactions")
+
+
+class Wallet(Base):
+    __tablename__ = "Wallet"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    userId = Column(String, ForeignKey("User.id"), unique=True, nullable=False)
+    balance = Column(Float, default=0.0, nullable=False)
+    walletNumber = Column(String, unique=True, nullable=True)
+    currency = Column(String, default="USD", nullable=False)
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="wallet")
+    withdrawals = relationship("Withdrawal", back_populates="wallet")
+    transactions = relationship("WalletTransaction", back_populates="wallet", cascade="all, delete-orphan")
+
+
+class WalletTransaction(Base):
+    __tablename__ = "WalletTransaction"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    walletId = Column(String, ForeignKey("Wallet.id"), nullable=False, index=True)
+    userId = Column(String, ForeignKey("User.id"), nullable=False, index=True)
+    type = Column(String, nullable=False, index=True)  # e.g., MT5_TO_WALLET, WALLET_WITHDRAWAL
+    amount = Column(Float, nullable=False)
+    status = Column(String, default="completed", nullable=False)
+    description = Column(String, nullable=True)
+    mt5AccountId = Column(String, nullable=True)
+    withdrawalId = Column(String, nullable=True, index=True)
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    wallet = relationship("Wallet", back_populates="transactions")
+    user = relationship("User", back_populates="walletTransactions")
 

@@ -9,7 +9,7 @@ from app.schemas.schemas import (
     WithdrawalUpdate,
     PaginatedResponse
 )
-from app.crud.crud import withdrawal_crud, mt5_account_crud
+from app.crud.crud import withdrawal_crud
 from app.models.models import User
 
 router = APIRouter()
@@ -92,19 +92,15 @@ def create_withdrawal(
     """
     Create new withdrawal request
     """
-    # Verify MT5 account belongs to user
-    mt5_account = mt5_account_crud.get_by_id(db, id=withdrawal_in.mt5AccountId)
-    if not mt5_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="MT5 account not found"
-        )
-    
-    if mt5_account.userId != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to create withdrawal for this MT5 account"
-        )
+    # If walletId is provided, verify it belongs to user
+    if withdrawal_in.walletId:
+        from app.models.models import Wallet
+        wallet = db.query(Wallet).filter(Wallet.id == withdrawal_in.walletId).first()
+        if wallet and wallet.userId != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to create withdrawal for this wallet"
+            )
     
     withdrawal = withdrawal_crud.create(db, obj_in=withdrawal_in, userId=current_user.id)
     return withdrawal

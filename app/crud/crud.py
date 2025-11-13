@@ -136,7 +136,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 # Import models
 from app.models.models import (
     User, KYC, MT5Account, MT5Transaction, 
-    Deposit, Withdrawal, PaymentMethod
+    Deposit, Withdrawal, PaymentMethod, Account, Transaction,
+    Wallet, WalletTransaction
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate,
@@ -145,7 +146,9 @@ from app.schemas.schemas import (
     MT5TransactionCreate, MT5TransactionUpdate,
     DepositCreate, DepositUpdate,
     WithdrawalCreate, WithdrawalUpdate,
-    PaymentMethodCreate, PaymentMethodUpdate
+    PaymentMethodCreate, PaymentMethodUpdate,
+    AccountCreate, AccountUpdate,
+    TransactionCreate, TransactionUpdate
 )
 
 
@@ -187,6 +190,99 @@ class PaymentMethodCRUD(CRUDBase[PaymentMethod, PaymentMethodCreate, PaymentMeth
     pass
 
 
+class AccountCRUD(CRUDBase[Account, AccountCreate, AccountUpdate]):
+    def get_by_user_id_and_type(
+        self, 
+        db: Session, 
+        user_id: str, 
+        account_type: str
+    ) -> Optional[Account]:
+        """Get account by user ID and account type"""
+        return db.query(Account).filter(
+            Account.userId == user_id,
+            Account.accountType == account_type
+        ).first()
+    
+    def get_by_user_id(
+        self, 
+        db: Session, 
+        user_id: str
+    ) -> List[Account]:
+        """Get all accounts for a user"""
+        return db.query(Account).filter(Account.userId == user_id).all()
+    
+    def update_balance(
+        self,
+        db: Session,
+        *,
+        account_id: str,
+        amount: float,
+        operation: str = "add"  # "add" or "subtract"
+    ) -> Optional[Account]:
+        """Update account balance"""
+        account = self.get_by_id(db, id=account_id)
+        if not account:
+            return None
+        
+        if operation == "add":
+            account.balance += amount
+        elif operation == "subtract":
+            account.balance -= amount
+        else:
+            account.balance = amount
+        
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+        return account
+
+
+class TransactionCRUD(CRUDBase[Transaction, TransactionCreate, TransactionUpdate]):
+    def create(self, db: Session, *, obj_in: TransactionCreate, **kwargs) -> Transaction:
+        """Create a new transaction with metadata field mapping"""
+        obj_in_data = obj_in.model_dump(exclude_unset=True) if hasattr(obj_in, 'model_dump') else obj_in.dict(exclude_unset=True)
+        # Map 'metadata' from API to 'metadata_json' Python attribute (which maps to 'metadata' DB column)
+        if 'metadata' in obj_in_data:
+            obj_in_data['metadata_json'] = obj_in_data.pop('metadata')
+        obj_in_data.update(kwargs)
+        # Ensure timestamps
+        if hasattr(self.model, 'createdAt') and not obj_in_data.get('createdAt'):
+            obj_in_data['createdAt'] = datetime.now(timezone.utc)
+        if hasattr(self.model, 'updatedAt') and not obj_in_data.get('updatedAt'):
+            obj_in_data['updatedAt'] = datetime.now(timezone.utc)
+        db_obj = self.model(**obj_in_data)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+    
+    def update(
+        self,
+        db: Session,
+        *,
+        db_obj: Transaction,
+        obj_in: TransactionUpdate
+    ) -> Transaction:
+        """Update transaction with metadata field mapping"""
+        obj_data = obj_in.model_dump(exclude_unset=True) if hasattr(obj_in, 'model_dump') else obj_in.dict(exclude_unset=True)
+        # Map 'metadata' from API to 'metadata_json' Python attribute (which maps to 'metadata' DB column)
+        if 'metadata' in obj_data:
+            obj_data['metadata_json'] = obj_data.pop('metadata')
+        
+        for field, value in obj_data.items():
+            if hasattr(db_obj, field):
+                setattr(db_obj, field, value)
+
+        # Auto-update updatedAt if model supports it
+        if hasattr(db_obj, 'updatedAt'):
+            setattr(db_obj, 'updatedAt', datetime.now(timezone.utc))
+
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+
 # Instantiate CRUD objects
 user_crud = UserCRUD(User)
 kyc_crud = KYCCRUD(KYC)
@@ -195,3 +291,5 @@ mt5_transaction_crud = MT5TransactionCRUD(MT5Transaction)
 deposit_crud = DepositCRUD(Deposit)
 withdrawal_crud = WithdrawalCRUD(Withdrawal)
 payment_method_crud = PaymentMethodCRUD(PaymentMethod)
+account_crud = AccountCRUD(Account)
+transaction_crud = TransactionCRUD(Transaction)

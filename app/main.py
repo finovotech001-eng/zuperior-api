@@ -12,16 +12,18 @@ from app.api.endpoints import (
     withdrawals,
     kyc,
     payment_methods,
-    emails
+    emails,
+    wallets
 )
 
 # Suppress noisy passlib bcrypt version warning (harmless)
 logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-print("DATABASE_URL:", settings.DATABASE_URL)
-print("SECRET_KEY:", settings.SECRET_KEY)
+# Note: We do NOT create tables here to avoid modifying the existing database
+# The database schema is managed by Prisma migrations
+# Base.metadata.create_all(bind=engine)  # Commented out to preserve existing DB structure
+print("DATABASE_URL:", settings.DATABASE_URL[:50] + "..." if len(settings.DATABASE_URL) > 50 else settings.DATABASE_URL)
+print("SECRET_KEY:", settings.SECRET_KEY[:20] + "..." if len(settings.SECRET_KEY) > 20 else settings.SECRET_KEY)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -110,6 +112,12 @@ app.include_router(
     payment_methods.router,
     prefix=f"{settings.API_V1_STR}/payment-methods",
     tags=["Payment Methods"]
+)
+
+app.include_router(
+    wallets.router,
+    prefix=f"{settings.API_V1_STR}/wallets",
+    tags=["Wallets"]
 )
 
 app.include_router(

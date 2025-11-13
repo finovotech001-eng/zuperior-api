@@ -104,19 +104,28 @@ class MT5AccountBase(BaseModel):
 class MT5AccountCreate(MT5AccountBase):
     password: Optional[str] = None
     leverage: Optional[int] = None
+    accountType: Optional[str] = "Live"
+    nameOnAccount: Optional[str] = None
+    package: Optional[str] = None
 
 
 class MT5AccountUpdate(BaseModel):
     accountId: Optional[str] = None
     password: Optional[str] = None
     leverage: Optional[int] = None
+    accountType: Optional[str] = None
+    nameOnAccount: Optional[str] = None
+    package: Optional[str] = None
 
 
 class MT5AccountResponse(MT5AccountBase):
     id: str
-    userId: str
+    userId: Optional[str] = None
+    accountType: str
     password: Optional[str] = None
     leverage: Optional[int] = None
+    nameOnAccount: Optional[str] = None
+    package: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime
     
@@ -220,7 +229,7 @@ class WithdrawalBase(BaseModel):
 
 
 class WithdrawalCreate(WithdrawalBase):
-    mt5AccountId: str
+    walletId: Optional[str] = None
 
 
 class WithdrawalUpdate(BaseModel):
@@ -231,13 +240,14 @@ class WithdrawalUpdate(BaseModel):
     cryptoAddress: Optional[str] = None
     paymentMethod: Optional[str] = None
     walletAddress: Optional[str] = None
+    walletId: Optional[str] = None
     status: Optional[str] = None
 
 
 class WithdrawalResponse(WithdrawalBase):
     id: str
     userId: str
-    mt5AccountId: str
+    walletId: Optional[str] = None
     status: str
     externalTransactionId: Optional[str] = None
     rejectionReason: Optional[str] = None
@@ -281,6 +291,91 @@ class PaymentMethodResponse(PaymentMethodBase):
     updatedAt: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============ Account (Wallet) Schemas ============
+class AccountBase(BaseModel):
+    accountType: str
+    balance: Optional[float] = 0.0
+
+
+class AccountCreate(AccountBase):
+    pass
+
+
+class AccountUpdate(BaseModel):
+    accountType: Optional[str] = None
+    balance: Optional[float] = None
+
+
+class AccountResponse(AccountBase):
+    id: str
+    userId: str
+    balance: float
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============ Transaction Schemas ============
+class TransactionBase(BaseModel):
+    type: str
+    amount: float
+    currency: Optional[str] = "USD"
+    paymentMethod: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[str] = None  # This maps to metadata_json in the model
+
+
+class TransactionCreate(TransactionBase):
+    depositId: Optional[str] = None
+    withdrawalId: Optional[str] = None
+    transactionId: Optional[str] = None
+
+
+class TransactionUpdate(BaseModel):
+    type: Optional[str] = None
+    amount: Optional[float] = None
+    status: Optional[str] = None
+    currency: Optional[str] = None
+    paymentMethod: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Optional[str] = None
+    depositId: Optional[str] = None
+    withdrawalId: Optional[str] = None
+    transactionId: Optional[str] = None
+
+
+class TransactionResponse(TransactionBase):
+    id: str
+    userId: str
+    status: str
+    transactionId: Optional[str] = None
+    depositId: Optional[str] = None
+    withdrawalId: Optional[str] = None
+    metadata: Optional[str] = None  # Will be populated from metadata_json attribute
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def model_validate(cls, obj):
+        """Override to map metadata_json attribute to metadata field"""
+        # Create a dict from the object attributes
+        if hasattr(obj, '__dict__'):
+            data = dict(obj.__dict__)
+            # Map metadata_json to metadata
+            if 'metadata_json' in data and 'metadata' not in data:
+                data['metadata'] = data.get('metadata_json')
+            # Remove metadata_json from data to avoid conflicts
+            data.pop('metadata_json', None)
+            # Create a simple object-like structure for validation
+            from types import SimpleNamespace
+            temp_obj = SimpleNamespace(**data)
+            return super().model_validate(temp_obj)
+        return super().model_validate(obj)
 
 
 
