@@ -393,10 +393,20 @@ class Notification(Base):
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     isRead = Column("isRead", Boolean, default=False, index=True)
-    metadata = Column(JSON, nullable=True)  # Additional data like accountId, amount, etc.
+    metadata_json = Column("metadata", JSON, nullable=True)  # Python attr 'metadata_json' maps to DB column 'metadata' to avoid SQLAlchemy reserved word conflict
     createdAt = Column("createdAt", DateTime(timezone=True), server_default=func.now(), index=True)
     readAt = Column("readAt", DateTime(timezone=True), nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="notifications")
+    
+    @property
+    def metadata(self):
+        """Property to access metadata_json as metadata for API compatibility"""
+        return self.metadata_json
+    
+    @metadata.setter
+    def metadata(self, value):
+        """Setter to set metadata_json from metadata"""
+        self.metadata_json = value
 
