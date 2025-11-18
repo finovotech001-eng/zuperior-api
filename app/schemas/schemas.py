@@ -229,6 +229,7 @@ class WithdrawalBase(BaseModel):
 
 
 class WithdrawalCreate(WithdrawalBase):
+    mt5AccountId: Optional[str] = None  # Optional - wallet withdrawals won't have this
     walletId: Optional[str] = None
 
 
@@ -240,6 +241,7 @@ class WithdrawalUpdate(BaseModel):
     cryptoAddress: Optional[str] = None
     paymentMethod: Optional[str] = None
     walletAddress: Optional[str] = None
+    mt5AccountId: Optional[str] = None
     walletId: Optional[str] = None
     status: Optional[str] = None
 
@@ -247,6 +249,7 @@ class WithdrawalUpdate(BaseModel):
 class WithdrawalResponse(WithdrawalBase):
     id: str
     userId: str
+    mt5AccountId: Optional[str] = None  # Optional - wallet withdrawals won't have this
     walletId: Optional[str] = None
     status: str
     externalTransactionId: Optional[str] = None
@@ -263,9 +266,18 @@ class WithdrawalResponse(WithdrawalBase):
 
 # ============ PaymentMethod Schemas ============
 class PaymentMethodBase(BaseModel):
-    address: str
+    # For crypto methods
+    address: Optional[str] = None
     currency: Optional[str] = "USDT"
     network: Optional[str] = "TRC20"
+    # Type of method: 'crypto' or 'bank'
+    methodType: Optional[str] = "crypto"
+    # Bank fields (nullable for crypto methods)
+    bankName: Optional[str] = None
+    accountName: Optional[str] = None
+    accountNumber: Optional[str] = None
+    ifscSwiftCode: Optional[str] = None
+    accountType: Optional[str] = None
 
 
 class PaymentMethodCreate(PaymentMethodBase):
@@ -276,6 +288,12 @@ class PaymentMethodUpdate(BaseModel):
     address: Optional[str] = None
     currency: Optional[str] = None
     network: Optional[str] = None
+    methodType: Optional[str] = None
+    bankName: Optional[str] = None
+    accountName: Optional[str] = None
+    accountNumber: Optional[str] = None
+    ifscSwiftCode: Optional[str] = None
+    accountType: Optional[str] = None
     status: Optional[str] = None
 
 

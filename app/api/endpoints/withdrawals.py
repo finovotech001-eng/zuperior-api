@@ -102,6 +102,16 @@ def create_withdrawal(
                 detail="Not authorized to create withdrawal for this wallet"
             )
     
+    # If mt5AccountId is provided, verify it belongs to user
+    if withdrawal_in.mt5AccountId:
+        from app.models.models import MT5Account
+        mt5_account = db.query(MT5Account).filter(MT5Account.id == withdrawal_in.mt5AccountId).first()
+        if mt5_account and mt5_account.userId != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to create withdrawal for this MT5 account"
+            )
+    
     withdrawal = withdrawal_crud.create(db, obj_in=withdrawal_in, userId=current_user.id)
     return withdrawal
 
