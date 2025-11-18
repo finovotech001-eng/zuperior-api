@@ -399,14 +399,4 @@ class Notification(Base):
     
     # Relationships
     user = relationship("User", back_populates="notifications")
-    
-    @property
-    def metadata(self):
-        """Property to access metadata_json as metadata for API compatibility"""
-        return self.metadata_json
-    
-    @metadata.setter
-    def metadata(self, value):
-        """Setter to set metadata_json from metadata"""
-        self.metadata_json = value
 
