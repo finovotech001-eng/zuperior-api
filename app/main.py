@@ -13,7 +13,8 @@ from app.api.endpoints import (
     kyc,
     payment_methods,
     emails,
-    wallets
+    wallets,
+    wallet_transactions
 )
 
 # Suppress noisy passlib bcrypt version warning (harmless)
@@ -124,6 +125,12 @@ app.include_router(
     emails.router,
     prefix=f"{settings.API_V1_STR}/emails",
     tags=["Emails"]
+)
+
+app.include_router(
+    wallet_transactions.router,
+    prefix=f"{settings.API_V1_STR}/wallet-transactions",
+    tags=["Wallet Transactions"]
 )
 
 

@@ -148,7 +148,8 @@ from app.schemas.schemas import (
     WithdrawalCreate, WithdrawalUpdate,
     PaymentMethodCreate, PaymentMethodUpdate,
     AccountCreate, AccountUpdate,
-    TransactionCreate, TransactionUpdate
+    TransactionCreate, TransactionUpdate,
+    WalletTransactionCreate, WalletTransactionUpdate
 )
 
 
@@ -283,6 +284,10 @@ class TransactionCRUD(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
         return db_obj
 
 
+class WalletTransactionCRUD(CRUDBase[WalletTransaction, WalletTransactionCreate, WalletTransactionUpdate]):
+    pass
+
+
 # Instantiate CRUD objects
 user_crud = UserCRUD(User)
 kyc_crud = KYCCRUD(KYC)
@@ -293,3 +298,4 @@ withdrawal_crud = WithdrawalCRUD(Withdrawal)
 payment_method_crud = PaymentMethodCRUD(PaymentMethod)
 account_crud = AccountCRUD(Account)
 transaction_crud = TransactionCRUD(Transaction)
+wallet_transaction_crud = WalletTransactionCRUD(WalletTransaction)

@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import random
+import re
 import logging
 from app.services.email_service import send_email_to
 from app.core.config import settings
@@ -389,3 +390,72 @@ Team Zuperior
     except Exception as e:
         logger.error(f"Error sending welcome email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send email")
+
+
+class CustomEmailAttachment(BaseModel):
+    filename: str
+    content: str  # Base64 encoded content
+    content_type: Optional[str] = "application/octet-stream"
+
+
+class CustomEmailRequest(BaseModel):
+    recipient_email: EmailStr
+    subject: str
+    content_body: str  # HTML or plain text content
+    is_html: Optional[bool] = True  # Whether content_body is HTML or plain text
+    attachments: Optional[List[CustomEmailAttachment]] = None
+
+
+@router.post("/send-custom", response_model=EmailResponse)
+def send_custom_email(request: CustomEmailRequest):
+    """
+    Send a custom email with optional attachments
+    
+    - **recipient_email**: Email address of the recipient
+    - **subject**: Email subject line
+    - **content_body**: Email body content (HTML or plain text)
+    - **is_html**: Whether content_body is HTML (default: True) or plain text
+    - **attachments**: Optional list of file attachments (base64 encoded)
+    """
+    try:
+        # Prepare text and HTML versions
+        if request.is_html:
+            html = request.content_body
+            # Create a simple plain text version from HTML (basic conversion)
+            # Remove HTML tags for plain text version
+            text = re.sub(r'<[^>]+>', '', html)
+            text = text.strip() or "Please view this email in an HTML-enabled email client."
+        else:
+            text = request.content_body
+            # Create a simple HTML version from plain text
+            html = f'<html><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;"><pre style="white-space: pre-wrap;">{request.content_body}</pre></body></html>'
+        
+        # Convert attachments to the format expected by send_email_to
+        attachments = None
+        if request.attachments:
+            attachments = []
+            for att in request.attachments:
+                attachments.append({
+                    'filename': att.filename,
+                    'content': att.content,  # Already base64 encoded string
+                    'content_type': att.content_type
+                })
+        
+        send_email_to(
+            to=request.recipient_email,
+            subject=request.subject,
+            text=text,
+            html=html,
+            attachments=attachments
+        )
+        
+        return EmailResponse(
+            success=True, 
+            message=f"Custom email sent to {request.recipient_email}"
+        )
+    except Exception as e:
+        logger.error(f"Error sending custom email: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Failed to send email: {str(e)}"
+        )

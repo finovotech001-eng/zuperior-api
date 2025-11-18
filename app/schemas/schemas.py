@@ -378,4 +378,37 @@ class TransactionResponse(TransactionBase):
         return super().model_validate(obj)
 
 
+# ============ WalletTransaction Schemas ============
+class WalletTransactionBase(BaseModel):
+    type: str
+    amount: float
+    status: Optional[str] = "completed"
+    description: Optional[str] = None
+    mt5AccountId: Optional[str] = None
+    withdrawalId: Optional[str] = None
+
+
+class WalletTransactionCreate(WalletTransactionBase):
+    walletId: str
+
+
+class WalletTransactionUpdate(BaseModel):
+    type: Optional[str] = None
+    amount: Optional[float] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+    mt5AccountId: Optional[str] = None
+    withdrawalId: Optional[str] = None
+
+
+class WalletTransactionResponse(WalletTransactionBase):
+    id: str
+    walletId: str
+    userId: str
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 
