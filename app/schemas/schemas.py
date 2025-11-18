@@ -63,6 +63,7 @@ class UserResponse(UserBase):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    deviceName: Optional[str] = None
 
 
 # ============ KYC Schemas ============

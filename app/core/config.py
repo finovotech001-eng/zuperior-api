@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    MAX_CONCURRENT_SESSIONS: int = 5
     API_V1_STR: str = "/api"
     PROJECT_NAME: str = "CRM API"
     BACKEND_CORS_ORIGINS: Union[str, List[str]] = ["*"]

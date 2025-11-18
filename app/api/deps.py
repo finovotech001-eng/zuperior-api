@@ -1,5 +1,5 @@
-from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from typing import Generator, Optional, Dict
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError
@@ -10,6 +10,50 @@ from app.crud.crud import user_crud
 from datetime import datetime
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/auth/login")
+
+
+def get_device_info(request: Request, device_name: Optional[str] = None) -> Dict[str, Optional[str]]:
+    """
+    Extract device information from request headers
+    
+    Args:
+        request: FastAPI Request object
+        device_name: Optional device name from client
+    
+    Returns:
+        Dictionary with ipAddress, userAgent, and deviceName
+    """
+    # Get IP address - check X-Forwarded-For first (for proxies/load balancers)
+    ip_address = None
+    if request.headers.get("X-Forwarded-For"):
+        # X-Forwarded-For can contain multiple IPs, take the first one
+        ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+    elif request.headers.get("X-Real-IP"):
+        ip_address = request.headers.get("X-Real-IP")
+    else:
+        # Fallback to client host
+        if request.client:
+            ip_address = request.client.host
+    
+    # Get user agent
+    user_agent = request.headers.get("User-Agent")
+    
+    # Use provided device name or derive from user agent
+    if not device_name and user_agent:
+        # Simple device name extraction from user agent
+        user_agent_lower = user_agent.lower()
+        if "mobile" in user_agent_lower or "android" in user_agent_lower or "iphone" in user_agent_lower:
+            device_name = "Mobile Device"
+        elif "tablet" in user_agent_lower or "ipad" in user_agent_lower:
+            device_name = "Tablet"
+        else:
+            device_name = "Desktop"
+    
+    return {
+        "ipAddress": ip_address,
+        "userAgent": user_agent,
+        "deviceName": device_name
+    }
 
 
 def get_current_user(
@@ -83,6 +127,10 @@ def verify_refresh_token(
     
     if not refresh_token:
         return None
+    
+    # Update lastActivity timestamp
+    refresh_token.lastActivity = datetime.utcnow()
+    db.commit()
     
     user = user_crud.get_by_id(db, id=user_id)
     return user

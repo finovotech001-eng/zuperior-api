@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -19,9 +19,10 @@ from app.schemas.schemas import (
 )
 from app.crud.crud import user_crud
 from app.models.models import RefreshToken, User
-from app.api.deps import verify_refresh_token, get_current_active_user
+from app.api.deps import verify_refresh_token, get_current_active_user, get_device_info
 from app.services.email_service import send_email_to
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ def register(
 
 @router.post("/login", response_model=Token)
 def login(
+    request: Request,
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
@@ -243,6 +245,22 @@ def login(
     user.lastLoginAt = datetime.utcnow()
     db.commit()
     
+    # Get device info
+    device_info = get_device_info(request)
+    
+    # Check active sessions count and revoke oldest if needed
+    active_sessions = db.query(RefreshToken).filter(
+        RefreshToken.userId == user.id,
+        RefreshToken.revoked == False,
+        RefreshToken.expiresAt > datetime.utcnow()
+    ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
+    
+    if len(active_sessions) >= settings.MAX_CONCURRENT_SESSIONS:
+        # Revoke oldest session
+        oldest_session = active_sessions[0]
+        oldest_session.revoked = True
+        db.commit()
+    
     # Create access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -257,11 +275,17 @@ def login(
         expires_delta=refresh_token_expires
     )
     
-    # Store refresh token in database
+    # Store refresh token in database with device info
+    now = datetime.utcnow()
     refresh_token_obj = RefreshToken(
+        id=str(uuid.uuid4()),
         userId=user.id,
         token=refresh_token,
-        expiresAt=datetime.utcnow() + refresh_token_expires
+        expiresAt=now + refresh_token_expires,
+        deviceName=device_info.get("deviceName"),
+        ipAddress=device_info.get("ipAddress"),
+        userAgent=device_info.get("userAgent"),
+        lastActivity=now
     )
     db.add(refresh_token_obj)
     db.commit()
@@ -276,6 +300,7 @@ def login(
 @router.post("/login/json", response_model=Token)
 def login_json(
     user_login: UserLogin,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -302,6 +327,22 @@ def login_json(
     user.lastLoginAt = datetime.utcnow()
     db.commit()
     
+    # Get device info (use deviceName from request if provided)
+    device_info = get_device_info(request, device_name=user_login.deviceName)
+    
+    # Check active sessions count and revoke oldest if needed
+    active_sessions = db.query(RefreshToken).filter(
+        RefreshToken.userId == user.id,
+        RefreshToken.revoked == False,
+        RefreshToken.expiresAt > datetime.utcnow()
+    ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
+    
+    if len(active_sessions) >= settings.MAX_CONCURRENT_SESSIONS:
+        # Revoke oldest session
+        oldest_session = active_sessions[0]
+        oldest_session.revoked = True
+        db.commit()
+    
     # Create access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -316,11 +357,17 @@ def login_json(
         expires_delta=refresh_token_expires
     )
     
-    # Store refresh token in database
+    # Store refresh token in database with device info
+    now = datetime.utcnow()
     refresh_token_obj = RefreshToken(
+        id=str(uuid.uuid4()),
         userId=user.id,
         token=refresh_token,
-        expiresAt=datetime.utcnow() + refresh_token_expires
+        expiresAt=now + refresh_token_expires,
+        deviceName=device_info.get("deviceName"),
+        ipAddress=device_info.get("ipAddress"),
+        userAgent=device_info.get("userAgent"),
+        lastActivity=now
     )
     db.add(refresh_token_obj)
     db.commit()
@@ -335,6 +382,7 @@ def login_json(
 @router.post("/refresh", response_model=Token)
 def refresh_token(
     token_data: TokenRefresh,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -348,6 +396,24 @@ def refresh_token(
             detail="Invalid refresh token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Get old token to preserve device info
+    old_token = db.query(RefreshToken).filter(
+        RefreshToken.token == token_data.refresh_token
+    ).first()
+    
+    # Get device info (use existing device info from old token if available)
+    device_info = get_device_info(request)
+    if old_token:
+        # Preserve device info from old token, but update IP/user agent if changed
+        device_info = {
+            "deviceName": old_token.deviceName or device_info.get("deviceName"),
+            "ipAddress": device_info.get("ipAddress") or old_token.ipAddress,
+            "userAgent": device_info.get("userAgent") or old_token.userAgent
+        }
+        # Update lastActivity before revoking
+        old_token.lastActivity = datetime.utcnow()
+        old_token.revoked = True
     
     # Create new access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -363,18 +429,17 @@ def refresh_token(
         expires_delta=refresh_token_expires
     )
     
-    # Revoke old refresh token
-    old_token = db.query(RefreshToken).filter(
-        RefreshToken.token == token_data.refresh_token
-    ).first()
-    if old_token:
-        old_token.revoked = True
-    
-    # Store new refresh token
+    # Store new refresh token with device info
+    now = datetime.utcnow()
     new_token_obj = RefreshToken(
+        id=str(uuid.uuid4()),
         userId=user.id,
         token=new_refresh_token,
-        expiresAt=datetime.utcnow() + refresh_token_expires
+        expiresAt=now + refresh_token_expires,
+        deviceName=device_info.get("deviceName"),
+        ipAddress=device_info.get("ipAddress"),
+        userAgent=device_info.get("userAgent"),
+        lastActivity=now
     )
     db.add(new_token_obj)
     db.commit()
@@ -402,8 +467,40 @@ def logout(
     ).first()
     
     if refresh_token:
+        # Update lastActivity before revoking
+        refresh_token.lastActivity = datetime.utcnow()
         refresh_token.revoked = True
         db.commit()
     
     return {"message": "Successfully logged out"}
+
+
+@router.post("/logout-all", status_code=status.HTTP_200_OK)
+def logout_all_devices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Logout from all devices by revoking all refresh tokens for the current user
+    """
+    # Get all non-revoked refresh tokens for the user
+    active_tokens = db.query(RefreshToken).filter(
+        RefreshToken.userId == current_user.id,
+        RefreshToken.revoked == False
+    ).all()
+    
+    # Revoke all tokens
+    count = 0
+    now = datetime.utcnow()
+    for token in active_tokens:
+        token.lastActivity = now
+        token.revoked = True
+        count += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Successfully logged out from all devices",
+        "sessions_revoked": count
+    }
 

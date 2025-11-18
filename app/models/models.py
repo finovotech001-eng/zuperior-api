@@ -53,12 +53,16 @@ class User(Base):
 class RefreshToken(Base):
     __tablename__ = "RefreshToken"
     
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=generate_uuid)
     userId = Column(String, ForeignKey("User.id", ondelete="CASCADE", onupdate="NO ACTION"), nullable=False, index=True)
     token = Column(String, unique=True, nullable=False, index=True)
     expiresAt = Column(DateTime(timezone=True), nullable=False, index=True)
     createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     revoked = Column(Boolean, nullable=True)
+    deviceName = Column(String, nullable=True)
+    ipAddress = Column(String, nullable=True)
+    userAgent = Column(String, nullable=True)
+    lastActivity = Column(DateTime(timezone=True), server_default=func.now(), nullable=True, index=True)
     
     # Relationships
     user = relationship("User", back_populates="refreshTokens")
