@@ -44,6 +44,7 @@ class User(Base):
     wallet = relationship("Wallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
     walletTransactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_user_role_status', 'role', 'status'),
@@ -163,6 +164,7 @@ class Deposit(Base):
     # Relationships
     user = relationship("User", back_populates="deposits")
     mt5Account = relationship("MT5Account", back_populates="deposits")
+    transactions = relationship("Transaction", back_populates="deposit", cascade="all, delete-orphan")
 
 
 class Withdrawal(Base):
@@ -193,6 +195,7 @@ class Withdrawal(Base):
     user = relationship("User", back_populates="withdrawals")
     mt5Account = relationship("MT5Account", back_populates="withdrawals")
     wallet = relationship("Wallet", back_populates="withdrawals")
+    transactions = relationship("Transaction", back_populates="withdrawal", cascade="all, delete-orphan")
 
 
 class PaymentMethod(Base):
