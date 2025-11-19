@@ -19,7 +19,9 @@ from app.schemas.schemas import (
     UserLogin,
     ForgotPasswordRequest,
     ResetPasswordRequest,
-    MessageResponse
+    MessageResponse,
+    LogoutAllResponse,
+    ActiveSessionsResponse
 )
 from app.crud.crud import user_crud
 from app.models.models import RefreshToken, User
@@ -380,7 +382,7 @@ def login(
     # Check active sessions count and revoke oldest if needed
     active_sessions = db.query(RefreshToken).filter(
         RefreshToken.userId == user.id,
-        RefreshToken.revoked == False,
+        RefreshToken.revoked != True,  # Handles None values
         RefreshToken.expiresAt > datetime.utcnow()
     ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
     
@@ -462,7 +464,7 @@ def login_json(
     # Check active sessions count and revoke oldest if needed
     active_sessions = db.query(RefreshToken).filter(
         RefreshToken.userId == user.id,
-        RefreshToken.revoked == False,
+        RefreshToken.revoked != True,  # Handles None values
         RefreshToken.expiresAt > datetime.utcnow()
     ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
     
@@ -604,7 +606,7 @@ def logout(
     return {"message": "Successfully logged out"}
 
 
-@router.post("/logout-all", status_code=status.HTTP_200_OK)
+@router.post("/logout-all", response_model=LogoutAllResponse, status_code=status.HTTP_200_OK)
 def logout_all_devices(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -612,25 +614,102 @@ def logout_all_devices(
     """
     Logout from all devices by revoking all refresh tokens for the current user
     """
-    # Get all non-revoked refresh tokens for the user
+    try:
+        now = datetime.utcnow()
+        
+        # Get all non-revoked, non-expired refresh tokens for the user
+        # Use != True to handle None values properly
+        active_tokens = db.query(RefreshToken).filter(
+            RefreshToken.userId == current_user.id,
+            RefreshToken.revoked != True,  # Handles None values
+            RefreshToken.expiresAt > now  # Only active tokens
+        ).all()
+        
+        # Revoke all tokens
+        count = 0
+        for token in active_tokens:
+            token.lastActivity = now
+            token.revoked = True
+            count += 1
+        
+        db.commit()
+        
+        logger.info(f"Revoked {count} refresh tokens for user {current_user.id}")
+        
+        return {
+            "message": "Successfully logged out from all devices",
+            "sessions_revoked": count
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error revoking tokens for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to logout from all devices"
+        )
+
+
+@router.get("/active-sessions", response_model=ActiveSessionsResponse, status_code=status.HTTP_200_OK)
+def get_active_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all active (non-revoked, non-expired) sessions for the current user
+    Returns list of devices currently logged in
+    """
+    now = datetime.utcnow()
+    
+    # Get all non-revoked, non-expired refresh tokens
     active_tokens = db.query(RefreshToken).filter(
         RefreshToken.userId == current_user.id,
-        RefreshToken.revoked == False
-    ).all()
+        RefreshToken.revoked != True,  # Handles None values
+        RefreshToken.expiresAt > now
+    ).order_by(RefreshToken.lastActivity.desc()).all()
     
-    # Revoke all tokens
-    count = 0
-    now = datetime.utcnow()
+    # Transform to response format
+    sessions = []
     for token in active_tokens:
-        token.lastActivity = now
-        token.revoked = True
-        count += 1
-    
-    db.commit()
+        # Parse device and browser from deviceName
+        device = "Desktop"
+        browser = "Unknown Browser"
+        
+        if token.deviceName:
+            parts = token.deviceName.split(" - ")
+            device = parts[0] if parts else "Desktop"
+            browser = parts[1] if len(parts) > 1 else "Unknown Browser"
+        elif token.userAgent:
+            # Fallback: parse from user agent
+            ua = token.userAgent.lower()
+            if "mobile" in ua or "android" in ua or "iphone" in ua:
+                device = "Mobile"
+            elif "tablet" in ua or "ipad" in ua:
+                device = "Tablet"
+            
+            if "chrome" in ua:
+                browser = "Chrome"
+            elif "firefox" in ua:
+                browser = "Firefox"
+            elif "safari" in ua and "chrome" not in ua:
+                browser = "Safari"
+            elif "edge" in ua:
+                browser = "Edge"
+        
+        sessions.append({
+            "id": token.id,
+            "device": device,
+            "browser": browser,
+            "ipAddress": token.ipAddress,
+            "createdAt": token.createdAt or token.lastActivity,
+            "lastActivity": token.lastActivity
+        })
     
     return {
-        "message": f"Successfully logged out from all devices",
-        "sessions_revoked": count
+        "success": True,
+        "data": {
+            "sessions": sessions
+        },
+        "count": len(sessions)
     }
 
 

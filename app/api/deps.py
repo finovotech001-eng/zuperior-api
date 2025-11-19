@@ -62,6 +62,9 @@ def get_current_user(
 ) -> User:
     """
     Get current user from JWT token
+    Also checks if user has at least one valid refresh token.
+    This ensures that if all tokens are revoked via "logout all devices",
+    the access token is also invalidated immediately.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -82,6 +85,23 @@ def get_current_user(
     user = user_crud.get_by_id(db, id=user_id)
     if user is None:
         raise credentials_exception
+    
+    # Check if user has at least one valid (non-revoked, non-expired) refresh token
+    # This ensures that if all tokens are revoked via "logout all devices",
+    # the access token is also invalidated immediately
+    now = datetime.utcnow()
+    valid_token_count = db.query(RefreshToken).filter(
+        RefreshToken.userId == user.id,
+        RefreshToken.revoked != True,  # Handles None values
+        RefreshToken.expiresAt > now
+    ).count()
+    
+    if valid_token_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please login again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     return user
 
@@ -121,7 +141,7 @@ def verify_refresh_token(
     refresh_token = db.query(RefreshToken).filter(
         RefreshToken.token == token,
         RefreshToken.userId == user_id,
-        RefreshToken.revoked == False,
+        RefreshToken.revoked != True,  # Handles None values
         RefreshToken.expiresAt > datetime.utcnow()
     ).first()
     

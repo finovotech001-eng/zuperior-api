@@ -80,6 +80,26 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class LogoutAllResponse(BaseModel):
+    message: str
+    sessions_revoked: int
+
+
+class ActiveSession(BaseModel):
+    id: str
+    device: Optional[str]
+    browser: Optional[str]
+    ipAddress: Optional[str]
+    createdAt: datetime
+    lastActivity: datetime
+
+
+class ActiveSessionsResponse(BaseModel):
+    success: bool
+    data: dict
+    count: int
+
+
 # ============ KYC Schemas ============
 class KYCBase(BaseModel):
     documentReference: Optional[str] = None
