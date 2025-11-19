@@ -2,6 +2,7 @@ from typing import Generator, Optional, Dict
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from jose import JWTError
 from app.core.database import get_db
 from app.core.security import decode_token
@@ -92,7 +93,7 @@ def get_current_user(
     now = datetime.utcnow()
     valid_token_count = db.query(RefreshToken).filter(
         RefreshToken.userId == user.id,
-        RefreshToken.revoked != True,  # Handles None values
+        or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
         RefreshToken.expiresAt > now
     ).count()
     
@@ -141,7 +142,7 @@ def verify_refresh_token(
     refresh_token = db.query(RefreshToken).filter(
         RefreshToken.token == token,
         RefreshToken.userId == user_id,
-        RefreshToken.revoked != True,  # Handles None values
+        or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
         RefreshToken.expiresAt > datetime.utcnow()
     ).first()
     

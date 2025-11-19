@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.core.security import (
@@ -382,7 +383,7 @@ def login(
     # Check active sessions count and revoke oldest if needed
     active_sessions = db.query(RefreshToken).filter(
         RefreshToken.userId == user.id,
-        RefreshToken.revoked != True,  # Handles None values
+        or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
         RefreshToken.expiresAt > datetime.utcnow()
     ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
     
@@ -416,7 +417,8 @@ def login(
         deviceName=device_info.get("deviceName"),
         ipAddress=device_info.get("ipAddress"),
         userAgent=device_info.get("userAgent"),
-        lastActivity=now
+        lastActivity=now,
+        revoked=False  # Explicitly set to False to ensure it's not None
     )
     db.add(refresh_token_obj)
     db.commit()
@@ -464,7 +466,7 @@ def login_json(
     # Check active sessions count and revoke oldest if needed
     active_sessions = db.query(RefreshToken).filter(
         RefreshToken.userId == user.id,
-        RefreshToken.revoked != True,  # Handles None values
+        or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
         RefreshToken.expiresAt > datetime.utcnow()
     ).order_by(RefreshToken.lastActivity.asc(), RefreshToken.createdAt.asc()).all()
     
@@ -498,7 +500,8 @@ def login_json(
         deviceName=device_info.get("deviceName"),
         ipAddress=device_info.get("ipAddress"),
         userAgent=device_info.get("userAgent"),
-        lastActivity=now
+        lastActivity=now,
+        revoked=False  # Explicitly set to False to ensure it's not None
     )
     db.add(refresh_token_obj)
     db.commit()
@@ -570,7 +573,8 @@ def refresh_token(
         deviceName=device_info.get("deviceName"),
         ipAddress=device_info.get("ipAddress"),
         userAgent=device_info.get("userAgent"),
-        lastActivity=now
+        lastActivity=now,
+        revoked=False  # Explicitly set to False to ensure it's not None
     )
     db.add(new_token_obj)
     db.commit()
@@ -618,10 +622,9 @@ def logout_all_devices(
         now = datetime.utcnow()
         
         # Get all non-revoked, non-expired refresh tokens for the user
-        # Use != True to handle None values properly
         active_tokens = db.query(RefreshToken).filter(
             RefreshToken.userId == current_user.id,
-            RefreshToken.revoked != True,  # Handles None values
+            or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
             RefreshToken.expiresAt > now  # Only active tokens
         ).all()
         
@@ -663,7 +666,7 @@ def get_active_sessions(
     # Get all non-revoked, non-expired refresh tokens
     active_tokens = db.query(RefreshToken).filter(
         RefreshToken.userId == current_user.id,
-        RefreshToken.revoked != True,  # Handles None values
+        or_(RefreshToken.revoked == False, RefreshToken.revoked.is_(None)),  # Explicitly handle NULL and False
         RefreshToken.expiresAt > now
     ).order_by(RefreshToken.lastActivity.desc()).all()
     
