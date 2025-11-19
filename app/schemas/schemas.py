@@ -66,6 +66,20 @@ class UserLogin(BaseModel):
     deviceName: Optional[str] = None
 
 
+# ============ Password Reset Schemas ============
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    newPassword: str = Field(..., min_length=6)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 # ============ KYC Schemas ============
 class KYCBase(BaseModel):
     documentReference: Optional[str] = None

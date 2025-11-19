@@ -66,4 +66,12 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def generate_password_reset_token() -> str:
+    """
+    Generate a secure random token for password reset
+    """
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
 

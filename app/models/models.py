@@ -29,6 +29,8 @@ class User(Base):
     lastLoginAt = Column(DateTime(timezone=True), nullable=True, index=True)
     role = Column(String, default="user", nullable=False)
     status = Column(String, default="active", nullable=False, index=True)
+    resetToken = Column(String, nullable=True, index=True)
+    resetTokenExpires = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")

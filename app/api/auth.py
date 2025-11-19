@@ -7,7 +7,8 @@ from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
-    create_refresh_token
+    create_refresh_token,
+    generate_password_reset_token
 )
 from app.core.config import settings
 from app.schemas.schemas import (
@@ -15,7 +16,10 @@ from app.schemas.schemas import (
     UserResponse,
     Token,
     TokenRefresh,
-    UserLogin
+    UserLogin,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    MessageResponse
 )
 from app.crud.crud import user_crud
 from app.models.models import RefreshToken, User
@@ -180,6 +184,131 @@ Team Zuperior
         logger.info(f"Welcome email sent to {email}")
     except Exception as e:
         logger.error(f"Failed to send welcome email to {email}: {e}")
+
+
+def send_password_reset_email_task(email: str, name: str, reset_token: str):
+    """
+    Background task to send password reset email
+    """
+    try:
+        recipient_name = name or 'Trader'
+        logo_url = settings.EMAIL_LOGO_URL or f"{settings.CLIENT_URL.rstrip('/')}/logo.png"
+        reset_url = f"{settings.CLIENT_URL.rstrip('/')}/reset-password?token={reset_token}"
+        
+        BRAND_PRIMARY = "#6242a5"
+        BRAND_PRIMARY_ALT = "#9f8bcf"
+        BORDER_COLOR = "#e5e7eb"
+        BG_COLOR = "#f9fafb"
+        
+        text = f"""Hi {recipient_name},
+
+We received a request to reset your password for your Zuperior account.
+
+Click the link below to reset your password:
+{reset_url}
+
+This link will expire in 1 hour for security reasons.
+
+If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+
+For security reasons, never share this link with anyone.
+
+Best regards,
+Team Zuperior
+"""
+        
+        html = f'''<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <style>
+        @media only screen and (max-width: 600px) {{
+            .main-table {{
+                width: 100% !important;
+            }}
+            .content-padding {{
+                padding: 16px !important;
+            }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:24px;background:{BG_COLOR};font-family:Arial,sans-serif">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:16px;box-shadow:0 4px 6px rgba(0,0,0,0.1)">
+        <!-- Header -->
+        <tr>
+            <td style="background:linear-gradient(135deg,{BRAND_PRIMARY},{BRAND_PRIMARY_ALT});padding:32px 24px;border-radius:16px 16px 0 0">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="text-align:center">
+                            <img src="{logo_url}" alt="Zuperior" style="height:32px;margin-bottom:12px" />
+                            <div style="font-size:24px;color:#fff;font-weight:700;margin-bottom:4px">Zuperior</div>
+                            <div style="font-size:14px;color:rgba(255,255,255,0.9)">Password Reset Request</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        
+        <!-- Content -->
+        <tr>
+            <td class="content-padding" style="padding:32px 24px">
+                <div style="font-size:20px;font-weight:600;color:#1f2937;margin-bottom:16px">Hi {recipient_name}!</div>
+                <p style="margin:0 0 16px 0;font-size:16px;color:#4b5563;line-height:1.6">
+                    We received a request to reset your password for your Zuperior account.
+                </p>
+                <p style="margin:0 0 24px 0;font-size:16px;color:#4b5563;line-height:1.6">
+                    Click the button below to reset your password. This link will expire in <strong>1 hour</strong> for security reasons.
+                </p>
+                
+                <!-- CTA Button -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+                    <tr>
+                        <td style="text-align:center">
+                            <a href="{reset_url}" style="display:inline-block;background:linear-gradient(135deg,{BRAND_PRIMARY},{BRAND_PRIMARY_ALT});color:#fff;text-decoration:none;font-weight:600;padding:14px 32px;border-radius:10px;font-size:16px;box-shadow:0 4px 6px rgba(98,66,165,0.3)">
+                                Reset Password
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- Alternative Link -->
+                <div style="background:#f8f9fa;border-radius:8px;padding:16px;margin-bottom:24px">
+                    <p style="margin:0 0 8px 0;font-size:12px;color:#6b7280;font-weight:600">Or copy and paste this link:</p>
+                    <p style="margin:0;font-size:12px;color:{BRAND_PRIMARY};word-break:break-all">{reset_url}</p>
+                </div>
+                
+                <!-- Security Notice -->
+                <div style="background:#fef3c7;border-radius:10px;padding:16px;border-left:4px solid #f59e0b">
+                    <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6">
+                        <strong>⚠️ Security Notice:</strong><br/>
+                        If you didn't request this password reset, please ignore this email. Your password will remain unchanged.<br/>
+                        For security reasons, never share this link with anyone.
+                    </p>
+                </div>
+            </td>
+        </tr>
+        
+        <!-- Footer -->
+        <tr>
+            <td style="background:#fafafa;padding:20px 24px;font-size:12px;color:#6b7280;border-top:1px solid {BORDER_COLOR};border-radius:0 0 16px 16px">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="text-align:center">
+                            <p style="margin:0 0 8px 0">© {datetime.now().year} Zuperior. All rights reserved.</p>
+                            <p style="margin:0;font-size:11px">This is an automated email. Please do not reply.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>'''
+        
+        send_email_to(email, "Reset Your Zuperior Password", text, html)
+        logger.info(f"Password reset email sent to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {email}: {e}")
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -502,5 +631,79 @@ def logout_all_devices(
     return {
         "message": f"Successfully logged out from all devices",
         "sessions_revoked": count
+    }
+
+
+@router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+def forgot_password(
+    request_data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Request password reset - sends email with reset token
+    """
+    # Find user by email
+    user = user_crud.get_by_email(db, email=request_data.email)
+    
+    # Always return success message to prevent email enumeration
+    # Don't reveal whether the email exists or not
+    if user:
+        # Generate reset token
+        reset_token = generate_password_reset_token()
+        reset_token_expires = datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
+        
+        # Save token to user
+        user.resetToken = reset_token
+        user.resetTokenExpires = reset_token_expires
+        db.commit()
+        
+        # Send password reset email in background
+        background_tasks.add_task(
+            send_password_reset_email_task,
+            user.email,
+            user.name,
+            reset_token
+        )
+    
+    # Always return the same message regardless of whether user exists
+    return {
+        "message": "If an account with that email exists, a password reset link has been sent."
+    }
+
+
+@router.post("/reset-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+def reset_password(
+    request_data: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using the reset token
+    """
+    # Find user by reset token
+    user = db.query(User).filter(
+        User.resetToken == request_data.token,
+        User.resetTokenExpires > datetime.utcnow()
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Hash new password
+    hashed_password = get_password_hash(request_data.newPassword)
+    
+    # Update password and clear reset token
+    user.password = hashed_password
+    user.resetToken = None
+    user.resetTokenExpires = None
+    db.commit()
+    
+    logger.info(f"Password reset successful for user {user.email}")
+    
+    return {
+        "message": "Password has been reset successfully. You can now login with your new password."
     }
 
