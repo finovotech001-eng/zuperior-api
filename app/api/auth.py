@@ -24,8 +24,9 @@ from app.schemas.schemas import (
     LogoutAllResponse,
     ActiveSessionsResponse
 )
-from app.crud.crud import user_crud
+from app.crud.crud import user_crud, wallet_crud
 from app.models.models import RefreshToken, User
+from app.schemas.schemas import WalletCreate
 from app.api.deps import verify_refresh_token, get_current_active_user, get_device_info
 from app.services.email_service import send_email_to
 import logging
@@ -340,6 +341,14 @@ def register(
     
     # Create user
     user = user_crud.create(db, obj_in=UserCreate(**user_data))
+    
+    # Automatically create wallet for the new user
+    try:
+        wallet_crud.create(db, obj_in=WalletCreate(), userId=user.id)
+        logger.info(f"Wallet created automatically for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to create wallet for user {user.id}: {e}")
+        # Continue even if wallet creation fails - user is already created
     
     # Send welcome email in background
     background_tasks.add_task(send_welcome_email_task, user.email, user.name)

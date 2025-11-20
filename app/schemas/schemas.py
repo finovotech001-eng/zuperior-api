@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 
 
@@ -412,6 +412,36 @@ class AccountResponse(AccountBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ============ Wallet Schemas ============
+class WalletBase(BaseModel):
+    balance: Optional[float] = 0.0
+    currency: Optional[str] = "USD"
+    walletNumber: Optional[str] = None
+
+
+class WalletCreate(BaseModel):
+    currency: Optional[str] = "USD"
+    walletNumber: Optional[str] = None
+
+
+class WalletUpdate(BaseModel):
+    balance: Optional[float] = None
+    currency: Optional[str] = None
+    walletNumber: Optional[str] = None
+
+
+class WalletResponse(WalletBase):
+    id: str
+    userId: str
+    balance: float
+    currency: str
+    walletNumber: Optional[str] = None
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ============ Transaction Schemas ============
 class TransactionBase(BaseModel):
     type: str
@@ -504,5 +534,155 @@ class WalletTransactionResponse(WalletTransactionBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+# ============ Notification Schemas ============
+class NotificationBase(BaseModel):
+    type: str
+    title: str
+    message: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class NotificationCreate(NotificationBase):
+    pass
+
+
+class NotificationUpdate(BaseModel):
+    isRead: Optional[bool] = None
+
+
+class NotificationResponse(NotificationBase):
+    id: str
+    userId: str
+    isRead: bool
+    metadata: Optional[Dict[str, Any]] = None
+    createdAt: datetime
+    readAt: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def model_validate(cls, obj):
+        """Override to map metadata_json attribute to metadata field"""
+        if hasattr(obj, '__dict__'):
+            data = dict(obj.__dict__)
+            if 'metadata_json' in data and 'metadata' not in data:
+                data['metadata'] = data.get('metadata_json')
+            data.pop('metadata_json', None)
+            from types import SimpleNamespace
+            temp_obj = SimpleNamespace(**data)
+            return super().model_validate(temp_obj)
+        return super().model_validate(obj)
+
+
+# ============ Ticket Schemas ============
+class TicketBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    ticketType: Optional[str] = None
+    priority: Optional[str] = "normal"
+    accountNumber: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class TicketCreate(TicketBase):
+    pass
+
+
+class TicketUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    ticketType: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assignedTo: Optional[str] = None
+    accountNumber: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class TicketResponse(TicketBase):
+    id: str
+    ticketNo: str
+    userId: str
+    status: str
+    priority: str
+    assignedTo: Optional[str] = None
+    tags: Optional[List[str]] = None
+    createdAt: datetime
+    updatedAt: datetime
+    lastReplyAt: Optional[datetime] = None
+    closedAt: Optional[datetime] = None
+    closedBy: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def model_validate(cls, obj):
+        """Override to handle tags JSON field"""
+        if hasattr(obj, '__dict__'):
+            data = dict(obj.__dict__)
+            # Handle tags if it's stored as JSON
+            if 'tags' in data and isinstance(data['tags'], str):
+                import json
+                try:
+                    data['tags'] = json.loads(data['tags'])
+                except:
+                    data['tags'] = []
+            from types import SimpleNamespace
+            temp_obj = SimpleNamespace(**data)
+            return super().model_validate(temp_obj)
+        return super().model_validate(obj)
+
+
+# ============ Ticket Reply Schemas ============
+class TicketReplyBase(BaseModel):
+    content: str
+    senderName: Optional[str] = None
+    senderType: Optional[str] = "user"
+    isInternal: Optional[bool] = False
+    attachments: Optional[List[str]] = None
+    replyId: Optional[str] = None  # For nested replies
+
+
+class TicketReplyCreate(TicketReplyBase):
+    pass
+
+
+class TicketReplyUpdate(BaseModel):
+    content: Optional[str] = None
+    isInternal: Optional[bool] = None
+    attachments: Optional[List[str]] = None
+
+
+class TicketReplyResponse(TicketReplyBase):
+    id: str
+    ticketId: str
+    userId: str
+    senderName: str
+    senderType: str
+    isInternal: bool
+    attachments: Optional[List[str]] = None
+    isRead: bool
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def model_validate(cls, obj):
+        """Override to handle attachments JSON field"""
+        if hasattr(obj, '__dict__'):
+            data = dict(obj.__dict__)
+            # Handle attachments if it's stored as JSON
+            if 'attachments' in data and isinstance(data['attachments'], str):
+                import json
+                try:
+                    data['attachments'] = json.loads(data['attachments'])
+                except:
+                    data['attachments'] = []
+            from types import SimpleNamespace
+            temp_obj = SimpleNamespace(**data)
+            return super().model_validate(temp_obj)
+        return super().model_validate(obj)
 
 

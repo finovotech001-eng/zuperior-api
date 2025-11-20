@@ -6,6 +6,8 @@ from core.database import engine, Base, SessionLocal
 from core.security import get_password_hash
 from models.models import User
 from sqlalchemy.exc import IntegrityError
+from crud.crud import wallet_crud
+from schemas.schemas import WalletCreate
 import sys
 
 
@@ -38,6 +40,13 @@ def create_admin_user(email: str, password: str, name: str = "Admin"):
         db.add(admin_user)
         db.commit()
         db.refresh(admin_user)
+        
+        # Automatically create wallet for admin user
+        try:
+            wallet_crud.create(db, obj_in=WalletCreate(), userId=admin_user.id)
+            print(f"  Wallet created automatically")
+        except Exception as e:
+            print(f"  Warning: Failed to create wallet: {e}")
         
         print(f"✓ Admin user created successfully!")
         print(f"  Email: {email}")
@@ -79,6 +88,13 @@ def create_test_user(email: str, password: str, name: str = "Test User"):
         db.add(test_user)
         db.commit()
         db.refresh(test_user)
+        
+        # Automatically create wallet for test user
+        try:
+            wallet_crud.create(db, obj_in=WalletCreate(), userId=test_user.id)
+            print(f"  Wallet created automatically")
+        except Exception as e:
+            print(f"  Warning: Failed to create wallet: {e}")
         
         print(f"✓ Test user created successfully!")
         print(f"  Email: {email}")

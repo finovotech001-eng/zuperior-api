@@ -4,12 +4,12 @@ from typing import Optional, Dict, Any
 from app.core.database import get_db
 from app.api.deps import get_current_active_user
 from app.schemas.schemas import (
-    AccountResponse,
-    AccountCreate,
-    AccountUpdate,
+    WalletResponse,
+    WalletCreate,
+    WalletUpdate,
     PaginatedResponse
 )
-from app.crud.crud import account_crud
+from app.crud.crud import wallet_crud
 from app.models.models import User
 
 router = APIRouter()
@@ -23,44 +23,59 @@ def list_wallets(
     per_page: int = Query(20, ge=1, le=100),
     sort_by: Optional[str] = Query(None),
     order: str = Query("desc", regex="^(asc|desc)$"),
-    account_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None)
 ):
     """
-    List wallets (accounts) for current user with pagination and filtering
+    List wallets for current user with pagination and filtering
+    Note: Each user has only one wallet (one-to-one relationship)
     """
-    filters: Dict[str, Any] = {}
-    if account_type:
-        filters["accountType"] = account_type
-    
-    result = account_crud.get_multi(
+    result = wallet_crud.get_multi(
         db,
         page=page,
         per_page=per_page,
         sort_by=sort_by,
         order=order,
-        filters=filters,
+        filters={},
         search=search,
-        search_fields=["accountType"],
+        search_fields=["walletNumber", "currency"],
         user_id=current_user.id
     )
     
     # Convert SQLAlchemy objects to Pydantic models
-    result['items'] = [AccountResponse.model_validate(item) for item in result['items']]
+    result['items'] = [WalletResponse.model_validate(item) for item in result['items']]
     
     return result
 
 
-@router.get("/{wallet_id}", response_model=AccountResponse)
+@router.get("/me", response_model=WalletResponse)
+def get_my_wallet(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current user's wallet (one-to-one relationship)
+    """
+    wallet = wallet_crud.get_by_user_id(db, user_id=current_user.id)
+    
+    if not wallet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Wallet not found for this user"
+        )
+    
+    return wallet
+
+
+@router.get("/{wallet_id}", response_model=WalletResponse)
 def get_wallet(
     wallet_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get wallet (account) by ID
+    Get wallet by ID
     """
-    wallet = account_crud.get_by_id(db, id=wallet_id)
+    wallet = wallet_crud.get_by_id(db, id=wallet_id)
     
     if not wallet:
         raise HTTPException(
@@ -77,67 +92,40 @@ def get_wallet(
     return wallet
 
 
-@router.get("/type/{account_type}", response_model=AccountResponse)
-def get_wallet_by_type(
-    account_type: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Get wallet (account) by account type for current user
-    """
-    wallet = account_crud.get_by_user_id_and_type(
-        db, 
-        user_id=current_user.id, 
-        account_type=account_type
-    )
-    
-    if not wallet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Wallet with type '{account_type}' not found"
-        )
-    
-    return wallet
-
-
-@router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=WalletResponse, status_code=status.HTTP_201_CREATED)
 def create_wallet(
-    wallet_in: AccountCreate,
+    wallet_in: WalletCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Create new wallet (account)
+    Create new wallet for current user
+    Note: Each user can only have one wallet (one-to-one relationship)
     """
-    # Check if account with same type already exists for user
-    existing_wallet = account_crud.get_by_user_id_and_type(
-        db,
-        user_id=current_user.id,
-        account_type=wallet_in.accountType
-    )
+    # Check if wallet already exists for user
+    existing_wallet = wallet_crud.get_by_user_id(db, user_id=current_user.id)
     
     if existing_wallet:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Wallet with type '{wallet_in.accountType}' already exists"
+            detail="Wallet already exists for this user"
         )
     
-    wallet = account_crud.create(db, obj_in=wallet_in, userId=current_user.id)
+    wallet = wallet_crud.create(db, obj_in=wallet_in, userId=current_user.id)
     return wallet
 
 
-@router.put("/{wallet_id}", response_model=AccountResponse)
+@router.put("/{wallet_id}", response_model=WalletResponse)
 def update_wallet(
     wallet_id: str,
-    wallet_update: AccountUpdate,
+    wallet_update: WalletUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Update wallet (account)
+    Update wallet
     """
-    wallet = account_crud.get_by_id(db, id=wallet_id)
+    wallet = wallet_crud.get_by_id(db, id=wallet_id)
     
     if not wallet:
         raise HTTPException(
@@ -151,24 +139,11 @@ def update_wallet(
             detail="Not authorized to update this wallet"
         )
     
-    # If accountType is being changed, check if new type already exists
-    if wallet_update.accountType and wallet_update.accountType != wallet.accountType:
-        existing_wallet = account_crud.get_by_user_id_and_type(
-            db,
-            user_id=current_user.id,
-            account_type=wallet_update.accountType
-        )
-        if existing_wallet and existing_wallet.id != wallet_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Wallet with type '{wallet_update.accountType}' already exists"
-            )
-    
-    updated_wallet = account_crud.update(db, db_obj=wallet, obj_in=wallet_update)
+    updated_wallet = wallet_crud.update(db, db_obj=wallet, obj_in=wallet_update)
     return updated_wallet
 
 
-@router.patch("/{wallet_id}/balance", response_model=AccountResponse)
+@router.patch("/{wallet_id}/balance", response_model=WalletResponse)
 def update_wallet_balance(
     wallet_id: str,
     amount: float = Query(..., description="Amount to add or subtract"),
@@ -180,7 +155,7 @@ def update_wallet_balance(
     Update wallet balance
     Operations: add, subtract, or set (to a specific amount)
     """
-    wallet = account_crud.get_by_id(db, id=wallet_id)
+    wallet = wallet_crud.get_by_id(db, id=wallet_id)
     
     if not wallet:
         raise HTTPException(
@@ -194,9 +169,9 @@ def update_wallet_balance(
             detail="Not authorized to update this wallet"
         )
     
-    updated_wallet = account_crud.update_balance(
+    updated_wallet = wallet_crud.update_balance(
         db,
-        account_id=wallet_id,
+        wallet_id=wallet_id,
         amount=amount,
         operation=operation
     )
@@ -217,9 +192,9 @@ def delete_wallet(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Delete wallet (account)
+    Delete wallet
     """
-    wallet = account_crud.get_by_id(db, id=wallet_id)
+    wallet = wallet_crud.get_by_id(db, id=wallet_id)
     
     if not wallet:
         raise HTTPException(
@@ -233,6 +208,6 @@ def delete_wallet(
             detail="Not authorized to delete this wallet"
         )
     
-    account_crud.delete(db, id=wallet_id)
+    wallet_crud.delete(db, id=wallet_id)
     return None
 
