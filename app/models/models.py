@@ -47,6 +47,8 @@ class User(Base):
     walletTransactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+    tickets = relationship("Ticket", back_populates="user", cascade="all, delete-orphan")
+    ticketReplies = relationship("TicketReply", back_populates="user", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_user_role_status', 'role', 'status'),
@@ -408,4 +410,51 @@ class Notification(Base):
     
     # Relationships
     user = relationship("User", back_populates="notifications")
+
+
+class Ticket(Base):
+    __tablename__ = "Ticket"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    ticketNo = Column(String(50), unique=True, nullable=False, index=True)
+    userId = Column(String, ForeignKey("User.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    ticketType = Column(String(100), nullable=True)
+    status = Column(String(50), default="New", nullable=False, index=True)
+    priority = Column(String(20), default="normal", nullable=False)
+    assignedTo = Column(String, nullable=True)
+    accountNumber = Column(String(50), nullable=True)
+    tags = Column(JSON, nullable=True)  # Array of strings stored as JSON
+    createdAt = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    lastReplyAt = Column(DateTime(timezone=True), nullable=True)
+    closedAt = Column(DateTime(timezone=True), nullable=True)
+    closedBy = Column(String, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="tickets")
+    replies = relationship("TicketReply", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketReply.createdAt")
+
+
+class TicketReply(Base):
+    __tablename__ = "TicketReply"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    ticketId = Column(String, ForeignKey("Ticket.id", ondelete="CASCADE"), nullable=False, index=True)
+    replyId = Column(String, ForeignKey("TicketReply.id", ondelete="CASCADE"), nullable=True)  # For nested replies
+    userId = Column(String, ForeignKey("User.id", ondelete="CASCADE"), nullable=False, index=True)
+    senderName = Column(String(255), nullable=False)
+    senderType = Column(String(20), default="user", nullable=False)  # user, admin, system
+    content = Column(Text, nullable=False)
+    isInternal = Column(Boolean, default=False)  # Internal notes visible only to admins
+    attachments = Column(JSON, nullable=True)  # Array of file URLs stored as JSON
+    createdAt = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    isRead = Column(Boolean, default=False)
+    
+    # Relationships
+    ticket = relationship("Ticket", back_populates="replies", foreign_keys=[ticketId])
+    user = relationship("User", back_populates="ticketReplies")
+    parentReply = relationship("TicketReply", remote_side=[id], foreign_keys=[replyId])
 
