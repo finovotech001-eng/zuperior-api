@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     SMTP_SECURE: bool = False
     CLIENT_URL: str = "https://dashboard.zuperior.com"
     EMAIL_LOGO_URL: str = ""
+    
+    # Cregis Payment Configuration
+    CREGIS_PAYMENT_PROJECT_ID: str = ""
+    CREGIS_PAYMENT_API_KEY: str = ""
+    CREGIS_PAYMENT_SECRET: str = ""
+    CREGIS_GATEWAY_URL: str = "https://t-rwwagnvw.cregis.io"
+    
+    # MT5 API Configuration
+    MT5_API_URL: str = ""
+    MT5_API_TOKEN: str = ""
 
     def model_post_init(self, __context):
         if isinstance(self.BACKEND_CORS_ORIGINS, str):

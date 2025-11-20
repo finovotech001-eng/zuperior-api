@@ -252,6 +252,47 @@ class DepositResponse(DepositBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ============ Cregis Deposit Schemas ============
+class CregisDepositRequest(BaseModel):
+    mt5AccountId: str
+    amount: str  # Amount as string (e.g., "100.00")
+    currency: str = "USDT"
+
+
+class PaymentInfoItem(BaseModel):
+    currency: str
+    network: str
+    address: str
+    amount: str
+    qr_code: Optional[str] = None
+
+
+class CregisDepositResponse(BaseModel):
+    id: str
+    amount: str
+    currency: str
+    payment_info: List[PaymentInfoItem]
+    expire_time: int
+
+
+class CregisCallbackRequest(BaseModel):
+    cregis_id: Optional[str] = None
+    third_party_id: Optional[str] = None
+    status: str
+    order_amount: Optional[str] = None
+    order_currency: Optional[str] = None
+    received_amount: Optional[str] = None
+    paid_currency: Optional[str] = None
+    txid: Optional[str] = None
+    tx_hash: Optional[str] = None
+    from_address: Optional[str] = None
+    to_address: Optional[str] = None
+    block_height: Optional[int] = None
+    block_time: Optional[int] = None
+    payment_detail: Optional[List[Dict[str, Any]]] = None
+    sign: Optional[str] = None
+
+
 # ============ Withdrawal Schemas ============
 class WithdrawalBase(BaseModel):
     amount: float
