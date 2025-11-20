@@ -371,6 +371,36 @@ class AccountResponse(AccountBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ============ Wallet Schemas ============
+class WalletBase(BaseModel):
+    balance: Optional[float] = 0.0
+    currency: Optional[str] = "USD"
+    walletNumber: Optional[str] = None
+
+
+class WalletCreate(BaseModel):
+    currency: Optional[str] = "USD"
+    walletNumber: Optional[str] = None
+
+
+class WalletUpdate(BaseModel):
+    balance: Optional[float] = None
+    currency: Optional[str] = None
+    walletNumber: Optional[str] = None
+
+
+class WalletResponse(WalletBase):
+    id: str
+    userId: str
+    balance: float
+    currency: str
+    walletNumber: Optional[str] = None
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ============ Transaction Schemas ============
 class TransactionBase(BaseModel):
     type: str

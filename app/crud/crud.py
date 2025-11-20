@@ -149,6 +149,7 @@ from app.schemas.schemas import (
     PaymentMethodCreate, PaymentMethodUpdate,
     AccountCreate, AccountUpdate,
     TransactionCreate, TransactionUpdate,
+    WalletCreate, WalletUpdate,
     WalletTransactionCreate, WalletTransactionUpdate
 )
 
@@ -284,6 +285,41 @@ class TransactionCRUD(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
         return db_obj
 
 
+class WalletCRUD(CRUDBase[Wallet, WalletCreate, WalletUpdate]):
+    def get_by_user_id(
+        self, 
+        db: Session, 
+        user_id: str
+    ) -> Optional[Wallet]:
+        """Get wallet by user ID (one-to-one relationship)"""
+        return db.query(Wallet).filter(Wallet.userId == user_id).first()
+    
+    def update_balance(
+        self,
+        db: Session,
+        *,
+        wallet_id: str,
+        amount: float,
+        operation: str = "add"  # "add", "subtract", or "set"
+    ) -> Optional[Wallet]:
+        """Update wallet balance"""
+        wallet = self.get_by_id(db, id=wallet_id)
+        if not wallet:
+            return None
+        
+        if operation == "add":
+            wallet.balance += amount
+        elif operation == "subtract":
+            wallet.balance -= amount
+        else:  # set
+            wallet.balance = amount
+        
+        db.add(wallet)
+        db.commit()
+        db.refresh(wallet)
+        return wallet
+
+
 class WalletTransactionCRUD(CRUDBase[WalletTransaction, WalletTransactionCreate, WalletTransactionUpdate]):
     pass
 
@@ -298,4 +334,5 @@ withdrawal_crud = WithdrawalCRUD(Withdrawal)
 payment_method_crud = PaymentMethodCRUD(PaymentMethod)
 account_crud = AccountCRUD(Account)
 transaction_crud = TransactionCRUD(Transaction)
+wallet_crud = WalletCRUD(Wallet)
 wallet_transaction_crud = WalletTransactionCRUD(WalletTransaction)
