@@ -74,6 +74,18 @@ def get_unread_count(
     return {"unread_count": count or 0}
 
 
+@router.put("/mark-all-read", response_model=MessageResponse)
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Mark all notifications as read for current user
+    """
+    count = notification_crud.mark_all_as_read(db, user_id=current_user.id)
+    return {"message": f"Marked {count} notifications as read"}
+
+
 @router.get("/{notification_id}", response_model=NotificationResponse)
 def get_notification(
     notification_id: str,
@@ -166,18 +178,6 @@ def mark_notification_read(
     
     updated_notification = notification_crud.mark_as_read(db, notification_id=notification_id)
     return updated_notification
-
-
-@router.put("/mark-all-read", response_model=MessageResponse)
-def mark_all_notifications_read(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Mark all notifications as read for current user
-    """
-    count = notification_crud.mark_all_as_read(db, user_id=current_user.id)
-    return {"message": f"Marked {count} notifications as read"}
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
