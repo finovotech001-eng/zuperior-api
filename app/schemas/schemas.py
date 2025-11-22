@@ -601,9 +601,9 @@ class TicketUpdate(BaseModel):
 
 
 class TicketResponse(TicketBase):
-    id: str
+    id: int
     ticketNo: str
-    userId: str
+    userId: str  # Maps to parentId in database
     status: str
     priority: str
     assignedTo: Optional[str] = None
@@ -641,7 +641,7 @@ class TicketReplyBase(BaseModel):
     senderType: Optional[str] = "user"
     isInternal: Optional[bool] = False
     attachments: Optional[List[str]] = None
-    replyId: Optional[str] = None  # For nested replies
+    replyId: Optional[int] = None  # For nested replies
 
 
 class TicketReplyCreate(TicketReplyBase):
@@ -655,9 +655,9 @@ class TicketReplyUpdate(BaseModel):
 
 
 class TicketReplyResponse(TicketReplyBase):
-    id: str
-    ticketId: str
-    userId: str
+    id: int
+    ticketId: int
+    userId: str  # Maps to senderId in database
     senderName: str
     senderType: str
     isInternal: bool

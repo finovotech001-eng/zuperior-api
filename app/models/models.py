@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer, Text, Index, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer, Text, Index, JSON, ARRAY
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
@@ -47,8 +48,8 @@ class User(Base):
     walletTransactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
-    tickets = relationship("Ticket", back_populates="user", cascade="all, delete-orphan")
-    ticketReplies = relationship("TicketReply", back_populates="user", cascade="all, delete-orphan")
+    # Note: tickets and ticketReplies relationships removed - use parent_id/sender_id queries instead
+    # since support_tickets.parent_id and support_ticket_replies.sender_id are strings, not foreign keys
     
     __table_args__ = (
         Index('idx_user_role_status', 'role', 'status'),
@@ -413,48 +414,64 @@ class Notification(Base):
 
 
 class Ticket(Base):
-    __tablename__ = "Ticket"
+    __tablename__ = "support_tickets"
     
-    id = Column(String, primary_key=True, default=generate_uuid)
-    ticketNo = Column(String(50), unique=True, nullable=False, index=True)
-    userId = Column(String, ForeignKey("User.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticketNo = Column("ticket_no", String(50), unique=True, nullable=False, index=True)
+    parentId = Column("parent_id", String(255), nullable=False, index=True)  # References User.id or User.clientId
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
-    ticketType = Column(String(100), nullable=True)
+    ticketType = Column("ticket_type", String(100), nullable=True)
     status = Column(String(50), default="New", nullable=False, index=True)
     priority = Column(String(20), default="normal", nullable=False)
-    assignedTo = Column(String, nullable=True)
-    accountNumber = Column(String(50), nullable=True)
-    tags = Column(JSON, nullable=True)  # Array of strings stored as JSON
-    createdAt = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    lastReplyAt = Column(DateTime(timezone=True), nullable=True)
-    closedAt = Column(DateTime(timezone=True), nullable=True)
-    closedBy = Column(String, nullable=True)
+    assignedTo = Column("assigned_to", String(255), nullable=True)
+    accountNumber = Column("account_number", String(50), nullable=True)
+    tags = Column(ARRAY(String), nullable=True, default=[])  # Array of strings
+    createdAt = Column("created_at", DateTime(timezone=True), server_default=func.now(), index=True)
+    updatedAt = Column("updated_at", DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    lastReplyAt = Column("last_reply_at", DateTime(timezone=True), nullable=True)
+    closedAt = Column("closed_at", DateTime(timezone=True), nullable=True)
+    closedBy = Column("closed_by", String(255), nullable=True)
     
     # Relationships
-    user = relationship("User", back_populates="tickets")
     replies = relationship("TicketReply", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketReply.createdAt")
+    
+    # Property for backward compatibility - maps userId to parentId
+    @hybrid_property
+    def userId(self):
+        return self.parentId
+    
+    @userId.setter
+    def userId(self, value):
+        self.parentId = value
 
 
 class TicketReply(Base):
-    __tablename__ = "TicketReply"
+    __tablename__ = "support_ticket_replies"
     
-    id = Column(String, primary_key=True, default=generate_uuid)
-    ticketId = Column(String, ForeignKey("Ticket.id", ondelete="CASCADE"), nullable=False, index=True)
-    replyId = Column(String, ForeignKey("TicketReply.id", ondelete="CASCADE"), nullable=True)  # For nested replies
-    userId = Column(String, ForeignKey("User.id", ondelete="CASCADE"), nullable=False, index=True)
-    senderName = Column(String(255), nullable=False)
-    senderType = Column(String(20), default="user", nullable=False)  # user, admin, system
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticketId = Column("ticket_id", Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    replyId = Column("reply_id", Integer, ForeignKey("support_ticket_replies.id", ondelete="CASCADE"), nullable=True, index=True)  # For nested replies
+    senderId = Column("sender_id", String(255), nullable=False)  # References User.id or User.clientId
+    senderName = Column("sender_name", String(255), nullable=False)
+    senderType = Column("sender_type", String(20), default="user", nullable=False)  # user, admin, system
     content = Column(Text, nullable=False)
-    isInternal = Column(Boolean, default=False)  # Internal notes visible only to admins
-    attachments = Column(JSON, nullable=True)  # Array of file URLs stored as JSON
-    createdAt = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    isRead = Column(Boolean, default=False)
+    isInternal = Column("is_internal", Boolean, default=False)  # Internal notes visible only to admins
+    attachments = Column(ARRAY(String), nullable=True, default=[])  # Array of file URLs
+    createdAt = Column("created_at", DateTime(timezone=True), server_default=func.now(), index=True)
+    updatedAt = Column("updated_at", DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    isRead = Column("is_read", Boolean, default=False)
     
     # Relationships
     ticket = relationship("Ticket", back_populates="replies", foreign_keys=[ticketId])
-    user = relationship("User", back_populates="ticketReplies")
     parentReply = relationship("TicketReply", remote_side=[id], foreign_keys=[replyId])
+    
+    # Property for backward compatibility - maps userId to senderId
+    @hybrid_property
+    def userId(self):
+        return self.senderId
+    
+    @userId.setter
+    def userId(self, value):
+        self.senderId = value
 

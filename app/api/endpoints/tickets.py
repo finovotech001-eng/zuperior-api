@@ -67,7 +67,7 @@ def list_tickets(
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
 def get_ticket(
-    ticket_id: str,
+    ticket_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -94,7 +94,7 @@ def get_ticket(
 
 @router.get("/{ticket_id}/replies", response_model=List[TicketReplyResponse])
 def get_ticket_replies(
-    ticket_id: str,
+    ticket_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -144,7 +144,7 @@ def create_ticket(
 
 @router.post("/{ticket_id}/replies", response_model=TicketReplyResponse, status_code=status.HTTP_201_CREATED)
 def create_ticket_reply(
-    ticket_id: str,
+    ticket_id: int,
     reply_in: TicketReplyCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -187,7 +187,7 @@ def create_ticket_reply(
 
 @router.put("/{ticket_id}", response_model=TicketResponse)
 def update_ticket(
-    ticket_id: str,
+    ticket_id: int,
     ticket_update: TicketUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -225,7 +225,7 @@ def update_ticket(
 
 @router.put("/{ticket_id}/close", response_model=TicketResponse)
 def close_ticket(
-    ticket_id: str,
+    ticket_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -259,8 +259,8 @@ def close_ticket(
 
 @router.put("/{ticket_id}/replies/{reply_id}", response_model=TicketReplyResponse)
 def update_ticket_reply(
-    ticket_id: str,
-    reply_id: str,
+    ticket_id: int,
+    reply_id: int,
     reply_update: TicketReplyUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -304,7 +304,7 @@ def update_ticket_reply(
 
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ticket(
-    ticket_id: str,
+    ticket_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -331,8 +331,8 @@ def delete_ticket(
 
 @router.delete("/{ticket_id}/replies/{reply_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ticket_reply(
-    ticket_id: str,
-    reply_id: str,
+    ticket_id: int,
+    reply_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):

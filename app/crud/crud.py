@@ -369,6 +369,10 @@ class NotificationCRUD(CRUDBase[Notification, NotificationCreate, NotificationUp
 
 
 class TicketCRUD(CRUDBase[Ticket, TicketCreate, TicketUpdate]):
+    def get_by_id(self, db: Session, id: int) -> Optional[Ticket]:
+        """Get a single record by ID (overridden for integer IDs)"""
+        return db.query(self.model).filter(self.model.id == id).first()
+    
     def create(self, db: Session, *, obj_in: TicketCreate, **kwargs) -> Ticket:
         """Create a new ticket with ticket number generation"""
         import uuid
@@ -380,6 +384,11 @@ class TicketCRUD(CRUDBase[Ticket, TicketCreate, TicketUpdate]):
         if 'tags' in obj_in_data and isinstance(obj_in_data['tags'], list):
             # Store as JSON - SQLAlchemy will handle JSON serialization
             pass
+        # Map userId to parentId for backward compatibility
+        if 'userId' in kwargs:
+            kwargs['parentId'] = kwargs.pop('userId')
+        if 'userId' in obj_in_data:
+            obj_in_data['parentId'] = obj_in_data.pop('userId')
         obj_in_data.update(kwargs)
         if hasattr(self.model, 'createdAt') and not obj_in_data.get('createdAt'):
             obj_in_data['createdAt'] = datetime.now(timezone.utc)
@@ -394,6 +403,14 @@ class TicketCRUD(CRUDBase[Ticket, TicketCreate, TicketUpdate]):
     def get_by_ticket_no(self, db: Session, ticket_no: str) -> Optional[Ticket]:
         """Get ticket by ticket number"""
         return db.query(self.model).filter(self.model.ticketNo == ticket_no).first()
+    
+    def delete(self, db: Session, *, id: int) -> Optional[Ticket]:
+        """Delete a record by ID (overridden for integer IDs)"""
+        obj = db.query(self.model).filter(self.model.id == id).first()
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
     
     def update(self, db: Session, *, db_obj: Ticket, obj_in: TicketUpdate) -> Ticket:
         """Update ticket with tags JSON field handling"""
@@ -412,7 +429,7 @@ class TicketCRUD(CRUDBase[Ticket, TicketCreate, TicketUpdate]):
         db.refresh(db_obj)
         return db_obj
     
-    def close_ticket(self, db: Session, *, ticket_id: str, closed_by: str) -> Optional[Ticket]:
+    def close_ticket(self, db: Session, *, ticket_id: int, closed_by: str) -> Optional[Ticket]:
         """Close a ticket"""
         ticket = self.get_by_id(db, id=ticket_id)
         if not ticket:
@@ -427,6 +444,10 @@ class TicketCRUD(CRUDBase[Ticket, TicketCreate, TicketUpdate]):
 
 
 class TicketReplyCRUD(CRUDBase[TicketReply, TicketReplyCreate, TicketReplyUpdate]):
+    def get_by_id(self, db: Session, id: int) -> Optional[TicketReply]:
+        """Get a single record by ID (overridden for integer IDs)"""
+        return db.query(self.model).filter(self.model.id == id).first()
+    
     def create(self, db: Session, *, obj_in: TicketReplyCreate, **kwargs) -> TicketReply:
         """Create a new ticket reply with attachments JSON field handling"""
         obj_in_data = obj_in.model_dump(exclude_unset=True) if hasattr(obj_in, 'model_dump') else obj_in.dict(exclude_unset=True)
@@ -434,6 +455,16 @@ class TicketReplyCRUD(CRUDBase[TicketReply, TicketReplyCreate, TicketReplyUpdate
         if 'attachments' in obj_in_data and isinstance(obj_in_data['attachments'], list):
             # Store as JSON - SQLAlchemy will handle JSON serialization
             pass
+        # Map userId to senderId for backward compatibility
+        if 'userId' in kwargs:
+            kwargs['senderId'] = kwargs.pop('userId')
+        if 'userId' in obj_in_data:
+            obj_in_data['senderId'] = obj_in_data.pop('userId')
+        # Map ticketId - ensure it's an integer
+        if 'ticketId' in kwargs:
+            kwargs['ticketId'] = int(kwargs['ticketId']) if isinstance(kwargs['ticketId'], str) else kwargs['ticketId']
+        if 'ticketId' in obj_in_data:
+            obj_in_data['ticketId'] = int(obj_in_data['ticketId']) if isinstance(obj_in_data['ticketId'], str) else obj_in_data['ticketId']
         obj_in_data.update(kwargs)
         if hasattr(self.model, 'createdAt') and not obj_in_data.get('createdAt'):
             obj_in_data['createdAt'] = datetime.now(timezone.utc)
@@ -454,9 +485,20 @@ class TicketReplyCRUD(CRUDBase[TicketReply, TicketReplyCreate, TicketReplyUpdate
         
         return db_obj
     
-    def get_by_ticket_id(self, db: Session, ticket_id: str) -> List[TicketReply]:
+    def get_by_ticket_id(self, db: Session, ticket_id: int) -> List[TicketReply]:
         """Get all replies for a ticket"""
+        # Handle string ticket_id for backward compatibility
+        if isinstance(ticket_id, str):
+            ticket_id = int(ticket_id)
         return db.query(self.model).filter(self.model.ticketId == ticket_id).order_by(self.model.createdAt).all()
+    
+    def delete(self, db: Session, *, id: int) -> Optional[TicketReply]:
+        """Delete a record by ID (overridden for integer IDs)"""
+        obj = db.query(self.model).filter(self.model.id == id).first()
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
     
     def update(self, db: Session, *, db_obj: TicketReply, obj_in: TicketReplyUpdate) -> TicketReply:
         """Update ticket reply with attachments JSON field handling"""
