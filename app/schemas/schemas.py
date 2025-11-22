@@ -618,25 +618,64 @@ class TicketResponse(TicketBase):
     
     @classmethod
     def model_validate(cls, obj):
-        """Override to handle tags JSON field and userId mapping"""
+        """
+        Override to handle comprehensive field mapping for TicketResponse.
+        
+        Handles:
+        1. Database column name mappings (snake_case -> camelCase)
+        2. Hybrid property mappings (parentId -> userId)
+        3. JSON/ARRAY field conversions (tags)
+        4. All field transformations needed for Pydantic validation
+        """
         if hasattr(obj, '__dict__'):
             data = dict(obj.__dict__)
-            # Handle tags if it's stored as JSON
-            if 'tags' in data and isinstance(data['tags'], str):
-                import json
-                try:
-                    data['tags'] = json.loads(data['tags'])
-                except:
+            
+            # Field mapping dictionary: database_column -> model_property
+            field_mappings = {
+                'ticket_no': 'ticketNo',
+                'parent_id': 'parentId',
+                'ticket_type': 'ticketType',
+                'assigned_to': 'assignedTo',
+                'account_number': 'accountNumber',
+                'created_at': 'createdAt',
+                'updated_at': 'updatedAt',
+                'last_reply_at': 'lastReplyAt',
+                'closed_at': 'closedAt',
+                'closed_by': 'closedBy',
+            }
+            
+            # Apply field mappings (snake_case -> camelCase)
+            for db_col, model_prop in field_mappings.items():
+                if db_col in data and model_prop not in data:
+                    data[model_prop] = data.pop(db_col)
+            
+            # Handle tags: convert JSON string to list if needed
+            if 'tags' in data:
+                if isinstance(data['tags'], str):
+                    import json
+                    try:
+                        data['tags'] = json.loads(data['tags'])
+                    except:
+                        data['tags'] = []
+                elif data['tags'] is None:
                     data['tags'] = []
-            # Map parentId to userId if userId is not present (for hybrid property)
-            if 'userId' not in data and 'parentId' in data:
-                data['userId'] = data['parentId']
-            # Also try to get userId from the hybrid property if available
-            if 'userId' not in data and hasattr(obj, 'userId'):
-                try:
-                    data['userId'] = obj.userId
-                except:
-                    pass
+            
+            # Map parentId to userId (hybrid property handling)
+            # Priority: 1) hybrid property, 2) parentId field, 3) parent_id field
+            if 'userId' not in data:
+                if hasattr(obj, 'userId'):
+                    try:
+                        data['userId'] = obj.userId
+                    except:
+                        pass
+                elif 'parentId' in data:
+                    data['userId'] = data['parentId']
+                elif 'parent_id' in data:
+                    data['userId'] = data['parent_id']
+            
+            # Clean up SQLAlchemy internal attributes
+            data.pop('_sa_instance_state', None)
+            
             from types import SimpleNamespace
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
@@ -679,25 +718,63 @@ class TicketReplyResponse(TicketReplyBase):
     
     @classmethod
     def model_validate(cls, obj):
-        """Override to handle attachments JSON field and userId mapping"""
+        """
+        Override to handle comprehensive field mapping for TicketReplyResponse.
+        
+        Handles:
+        1. Database column name mappings (snake_case -> camelCase)
+        2. Hybrid property mappings (senderId -> userId)
+        3. JSON/ARRAY field conversions (attachments)
+        4. All field transformations needed for Pydantic validation
+        """
         if hasattr(obj, '__dict__'):
             data = dict(obj.__dict__)
-            # Handle attachments if it's stored as JSON
-            if 'attachments' in data and isinstance(data['attachments'], str):
-                import json
-                try:
-                    data['attachments'] = json.loads(data['attachments'])
-                except:
+            
+            # Field mapping dictionary: database_column -> model_property
+            field_mappings = {
+                'ticket_id': 'ticketId',
+                'reply_id': 'replyId',
+                'sender_id': 'senderId',
+                'sender_name': 'senderName',
+                'sender_type': 'senderType',
+                'is_internal': 'isInternal',
+                'created_at': 'createdAt',
+                'updated_at': 'updatedAt',
+                'is_read': 'isRead',
+            }
+            
+            # Apply field mappings (snake_case -> camelCase)
+            for db_col, model_prop in field_mappings.items():
+                if db_col in data and model_prop not in data:
+                    data[model_prop] = data.pop(db_col)
+            
+            # Handle attachments: convert JSON string to list if needed
+            if 'attachments' in data:
+                if isinstance(data['attachments'], str):
+                    import json
+                    try:
+                        data['attachments'] = json.loads(data['attachments'])
+                    except:
+                        data['attachments'] = []
+                elif data['attachments'] is None:
                     data['attachments'] = []
-            # Map senderId to userId if userId is not present (for hybrid property)
-            if 'userId' not in data and 'senderId' in data:
-                data['userId'] = data['senderId']
-            # Also try to get userId from the hybrid property if available
-            if 'userId' not in data and hasattr(obj, 'userId'):
-                try:
-                    data['userId'] = obj.userId
-                except:
-                    pass
+            
+            # Map senderId to userId (hybrid property handling)
+            # Priority: 1) hybrid property, 2) senderId field, 3) sender_id field
+            if 'userId' not in data:
+                if hasattr(obj, 'userId'):
+                    try:
+                        data['userId'] = obj.userId
+                    except:
+                        pass
+                elif 'senderId' in data:
+                    data['userId'] = data['senderId']
+                elif 'sender_id' in data:
+                    data['userId'] = data['sender_id']
+            
+            # Clean up SQLAlchemy internal attributes
+            data.pop('_sa_instance_state', None)
+            
             from types import SimpleNamespace
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
