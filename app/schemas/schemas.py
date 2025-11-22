@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 
@@ -112,6 +112,8 @@ class KYCCreate(KYCBase):
 
 
 class KYCUpdate(KYCBase):
+    isDocumentVerified: Optional[bool] = None
+    isAddressVerified: Optional[bool] = None
     verificationStatus: Optional[str] = None
     rejectionReason: Optional[str] = None
 
@@ -586,7 +588,40 @@ class TicketBase(BaseModel):
 
 
 class TicketCreate(TicketBase):
-    pass
+    """
+    Schema for creating a new ticket.
+    Accepts both camelCase and snake_case field names for compatibility.
+    """
+    # Additional fields that can be set during creation (admin-only in practice)
+    status: Optional[str] = None
+    assignedTo: Optional[str] = None
+    
+    model_config = ConfigDict(
+        populate_by_name=True,  # Allow both field name and alias
+        from_attributes=True
+    )
+    
+    @model_validator(mode='before')
+    @classmethod
+    def handle_field_names(cls, data: Any) -> Any:
+        """
+        Convert snake_case field names to camelCase for compatibility.
+        Handles both dict and object inputs.
+        """
+        if isinstance(data, dict):
+            # Field name mappings: snake_case -> camelCase
+            field_mappings = {
+                'ticket_type': 'ticketType',
+                'account_number': 'accountNumber',
+                'assigned_to': 'assignedTo',
+            }
+            
+            # Convert snake_case to camelCase
+            for snake_case, camel_case in field_mappings.items():
+                if snake_case in data and camel_case not in data:
+                    data[camel_case] = data.pop(snake_case)
+        
+        return data
 
 
 class TicketUpdate(BaseModel):
