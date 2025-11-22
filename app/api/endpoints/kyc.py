@@ -42,16 +42,12 @@ def create_kyc(
     """
     Create or submit KYC for current user
     """
-    # Check if KYC already exists
     existing_kyc = kyc_crud.get_by_user_id(db, user_id=current_user.id)
-    if existing_kyc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="KYC already exists for this user"
-        )
+    
+    # Build data (include None to allow overwrites)
+    kyc_data = kyc_in.model_dump()
     
     # Set submission timestamps based on what's provided
-    kyc_data = kyc_in.model_dump()
     if kyc_data.get("documentReference"):
         kyc_data["documentSubmittedAt"] = datetime.now(timezone.utc)
     if kyc_data.get("addressReference"):
@@ -60,6 +56,15 @@ def create_kyc(
     # Set initial verification status if not provided
     if not kyc_data.get("verificationStatus"):
         kyc_data["verificationStatus"] = "Pending"
+    
+    if existing_kyc:
+        # Overwrite existing KYC (admin use-case)
+        updated_kyc = kyc_crud.update(
+            db,
+            db_obj=existing_kyc,
+            obj_in=KYCUpdate(**kyc_data)
+        )
+        return updated_kyc
     
     kyc = kyc_crud.create(
         db,
