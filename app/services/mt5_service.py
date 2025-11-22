@@ -103,3 +103,4 @@ class MT5Service:
 # Create singleton instance
 mt5_service = MT5Service()
 
+

@@ -192,3 +192,4 @@ class CregisService:
 # Create singleton instance
 cregis_service = CregisService()
 
+

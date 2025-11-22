@@ -618,7 +618,7 @@ class TicketResponse(TicketBase):
     
     @classmethod
     def model_validate(cls, obj):
-        """Override to handle tags JSON field"""
+        """Override to handle tags JSON field and userId mapping"""
         if hasattr(obj, '__dict__'):
             data = dict(obj.__dict__)
             # Handle tags if it's stored as JSON
@@ -628,6 +628,15 @@ class TicketResponse(TicketBase):
                     data['tags'] = json.loads(data['tags'])
                 except:
                     data['tags'] = []
+            # Map parentId to userId if userId is not present (for hybrid property)
+            if 'userId' not in data and 'parentId' in data:
+                data['userId'] = data['parentId']
+            # Also try to get userId from the hybrid property if available
+            if 'userId' not in data and hasattr(obj, 'userId'):
+                try:
+                    data['userId'] = obj.userId
+                except:
+                    pass
             from types import SimpleNamespace
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
