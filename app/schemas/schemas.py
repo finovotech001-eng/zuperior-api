@@ -1,3 +1,4 @@
+import json
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from typing import Optional, List, Any, Dict
 from datetime import datetime
@@ -108,7 +109,9 @@ class KYCBase(BaseModel):
 
 
 class KYCCreate(KYCBase):
-    pass
+    isDocumentVerified: Optional[bool] = None
+    isAddressVerified: Optional[bool] = None
+    verificationStatus: Optional[str] = None
 
 
 class KYCUpdate(KYCBase):
@@ -786,10 +789,9 @@ class TicketReplyResponse(TicketReplyBase):
             # Handle attachments: convert JSON string to list if needed
             if 'attachments' in data:
                 if isinstance(data['attachments'], str):
-                    import json
                     try:
                         data['attachments'] = json.loads(data['attachments'])
-                    except:
+                    except:  # fallback to empty list when JSON parse fails
                         data['attachments'] = []
                 elif data['attachments'] is None:
                     data['attachments'] = []
@@ -814,5 +816,3 @@ class TicketReplyResponse(TicketReplyBase):
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
         return super().model_validate(obj)
-
-

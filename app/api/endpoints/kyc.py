@@ -57,7 +57,7 @@ def create_kyc(
     if kyc_data.get("addressReference"):
         kyc_data["addressSubmittedAt"] = datetime.now(timezone.utc)
     
-    # Set initial verification status
+    # Set initial verification status if not provided
     if not kyc_data.get("verificationStatus"):
         kyc_data["verificationStatus"] = "Pending"
     
@@ -167,4 +167,3 @@ def delete_kyc(
     
     kyc_crud.delete(db, id=kyc.id)
     return None
-

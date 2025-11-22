@@ -474,4 +474,3 @@ class TicketReply(Base):
     @userId.setter
     def userId(self, value):
         self.senderId = value
-
