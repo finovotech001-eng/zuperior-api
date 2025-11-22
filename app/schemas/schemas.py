@@ -679,7 +679,7 @@ class TicketReplyResponse(TicketReplyBase):
     
     @classmethod
     def model_validate(cls, obj):
-        """Override to handle attachments JSON field"""
+        """Override to handle attachments JSON field and userId mapping"""
         if hasattr(obj, '__dict__'):
             data = dict(obj.__dict__)
             # Handle attachments if it's stored as JSON
@@ -689,6 +689,15 @@ class TicketReplyResponse(TicketReplyBase):
                     data['attachments'] = json.loads(data['attachments'])
                 except:
                     data['attachments'] = []
+            # Map senderId to userId if userId is not present (for hybrid property)
+            if 'userId' not in data and 'senderId' in data:
+                data['userId'] = data['senderId']
+            # Also try to get userId from the hybrid property if available
+            if 'userId' not in data and hasattr(obj, 'userId'):
+                try:
+                    data['userId'] = obj.userId
+                except:
+                    pass
             from types import SimpleNamespace
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
