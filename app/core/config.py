@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     CREGIS_PAYMENT_API_KEY: str = ""
     CREGIS_PAYMENT_SECRET: str = ""
     CREGIS_GATEWAY_URL: str = "https://t-rwwagnvw.cregis.io"
+    CREGIS_USDT_DEPOSIT_ADDRESS: str = ""  # Optional fallback address if Cregis omits it
+    CREGIS_SETTLEMENT_CURRENCY: str = "USDT"
+    CREGIS_SETTLEMENT_NETWORK: str = "TRC20"
     
     # MT5 API Configuration
     MT5_API_URL: str = ""
@@ -52,6 +55,7 @@ class Settings(BaseSettings):
         env_file=str(BASE_DIR / ".env"),  # 👈 explicit full path
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",  # Ignore env vars we don't explicitly declare
     )
 
 settings = Settings()

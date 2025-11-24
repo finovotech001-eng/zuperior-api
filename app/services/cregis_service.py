@@ -164,6 +164,55 @@ class CregisService:
         except Exception as e:
             return {"success": False, "error": f"Unexpected error: {str(e)}"}
     
+    def query_payment_order(self, cregis_id: str) -> Dict[str, Any]:
+        """
+        Query a payment order to retrieve latest payment_info (addresses/QR codes)
+        """
+        try:
+            if not cregis_id:
+                return {"success": False, "error": "cregis_id is required"}
+            
+            nonce = uuid.uuid4().hex[:8]
+            timestamp = int(time.time() * 1000)
+            
+            payload: Dict[str, Any] = {
+                "pid": int(self.project_id),
+                "nonce": nonce,
+                "timestamp": timestamp,
+                "cregis_id": cregis_id,
+            }
+            
+            sign = self._generate_signature(payload, self.api_key)
+            request_data = {**payload, "sign": sign}
+            
+            url = f"{self.gateway_url}/api/v2/checkout/info"
+            response = requests.post(
+                url,
+                json=request_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if not response.ok:
+                return {
+                    "success": False,
+                    "error": f"Cregis query failed with status {response.status_code}: {response.text}"
+                }
+            
+            data = response.json()
+            if data.get("code") != "00000":
+                return {
+                    "success": False,
+                    "error": f"Cregis query error: {data.get('msg', 'Unknown error')}"
+                }
+            
+            return {"success": True, "data": data.get("data", {})}
+        
+        except requests.exceptions.RequestException as e:
+            return {"success": False, "error": f"Network error: {str(e)}"}
+        except Exception as e:
+            return {"success": False, "error": f"Unexpected error: {str(e)}"}
+    
     def verify_callback_signature(
         self,
         params: Dict[str, Any],
@@ -191,5 +240,4 @@ class CregisService:
 
 # Create singleton instance
 cregis_service = CregisService()
-
 
