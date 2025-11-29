@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
+import base64
+import io
 from app.core.database import get_db
 from app.api.deps import get_current_active_user
 from app.schemas.schemas import (
@@ -15,12 +17,50 @@ from app.schemas.schemas import (
     PaymentInfoItem
 )
 from app.crud.crud import deposit_crud, mt5_account_crud, mt5_transaction_crud
-from app.models.models import User, Deposit, MT5Transaction
+from app.models.models import User, Deposit, MT5Account, MT5Transaction
 from app.services.cregis_service import cregis_service
 from app.services.mt5_service import mt5_service
 from app.core.config import settings
 
 router = APIRouter()
+
+
+def _get_user_mt5_account(db: Session, current_user: User, account_identifier: str) -> MT5Account:
+    """
+    Resolve MT5 account either by internal UUID or MT5 login and ensure ownership.
+    """
+    mt5_account = mt5_account_crud.get_by_id(db, id=account_identifier)
+    if not mt5_account:
+        mt5_account = mt5_account_crud.get_by_account_id(db, account_id=account_identifier)
+    
+    if not mt5_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="MT5 account not found"
+        )
+    
+    if mt5_account.userId and mt5_account.userId != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create deposit for this MT5 account"
+        )
+    
+    return mt5_account
+
+
+def _generate_qr_data_uri(text: str) -> Optional[str]:
+    """
+    Generate a PNG QR code data URI for a given text. Returns None on failure.
+    """
+    try:
+        import segno
+        qr = segno.make(text, error="h")
+        buffer = io.BytesIO()
+        qr.save(buffer, kind="png", scale=6)
+        b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        return None
 
 
 @router.get("/", response_model=PaginatedResponse)
@@ -100,21 +140,10 @@ def create_deposit(
     """
     Create new deposit
     """
-    # Verify MT5 account belongs to user
-    mt5_account = mt5_account_crud.get_by_id(db, id=deposit_in.mt5AccountId)
-    if not mt5_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="MT5 account not found"
-        )
+    mt5_account = _get_user_mt5_account(db, current_user, deposit_in.mt5AccountId)
     
-    if mt5_account.userId != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to create deposit for this MT5 account"
-        )
-    
-    deposit = deposit_crud.create(db, obj_in=deposit_in, userId=current_user.id)
+    deposit_data = deposit_in.model_copy(update={"mt5AccountId": mt5_account.id})
+    deposit = deposit_crud.create(db, obj_in=deposit_data, userId=current_user.id)
     return deposit
 
 
@@ -187,19 +216,8 @@ def create_cregis_crypto_deposit(
     for mobile app to display.
     """
     try:
-        # Validate MT5 account belongs to user
-        mt5_account = mt5_account_crud.get_by_id(db, id=request.mt5AccountId)
-        if not mt5_account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="MT5 account not found"
-            )
-        
-        if mt5_account.userId != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to create deposit for this MT5 account"
-            )
+        # Validate MT5 account belongs to user (accept UUID or MT5 login)
+        mt5_account = _get_user_mt5_account(db, current_user, request.mt5AccountId)
         
         # Validate amount
         try:
@@ -242,18 +260,45 @@ def create_cregis_crypto_deposit(
         payment_info = cregis_data.get("payment_info", [])
         expire_time = cregis_data.get("expire_time")
         
-        if not payment_info or len(payment_info) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Cregis did not return payment information"
-            )
+        # Extract deposit address from first payment_info item (handle alternative keys)
+        def extract_address(info: Dict[str, Any]) -> Optional[str]:
+            return info.get("address") or info.get("receive_address") or info.get("pay_address") or info.get("payment_address")
         
-        # Extract deposit address from first payment_info item
-        deposit_address = payment_info[0].get("address") if payment_info else None
+        # If payment_info is missing or address missing, try querying order info from Cregis
+        if (not payment_info or len(payment_info) == 0 or not extract_address(payment_info[0])) and cregis_id:
+            query_result = cregis_service.query_payment_order(cregis_id)
+            if query_result.get("success"):
+                queried_data = query_result.get("data", {})
+                payment_info = queried_data.get("payment_info") or payment_info
+                expire_time = queried_data.get("expire_time") or expire_time
+        
+        # If still no payment_info, synthesize one using configured fallback address
+        if not payment_info or len(payment_info) == 0:
+            fallback_address = settings.CREGIS_USDT_DEPOSIT_ADDRESS.strip() if settings.CREGIS_USDT_DEPOSIT_ADDRESS else None
+            if fallback_address:
+                payment_info = [{
+                    "currency": request.currency or settings.CREGIS_SETTLEMENT_CURRENCY,
+                    "network": settings.CREGIS_SETTLEMENT_NETWORK,
+                    "address": fallback_address,
+                    "amount": request.amount,
+                    "qr_code": cregis_data.get("qr_code"),
+                }]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Cregis did not return payment information"
+                )
+        
+        deposit_address = extract_address(payment_info[0]) or settings.CREGIS_USDT_DEPOSIT_ADDRESS or None
+        if not deposit_address:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Cregis did not return a deposit address"
+            )
         
         # Create deposit record
         deposit_data = DepositCreate(
-            mt5AccountId=request.mt5AccountId,
+            mt5AccountId=mt5_account.id,
             amount=amount_float,
             currency=request.currency,
             method="crypto",
@@ -267,7 +312,7 @@ def create_cregis_crypto_deposit(
         # Create MT5Transaction record
         from app.schemas.schemas import MT5TransactionCreate
         mt5_transaction_data = MT5TransactionCreate(
-            mt5AccountId=request.mt5AccountId,
+            mt5AccountId=mt5_account.id,
             type="Deposit",
             amount=amount_float,
             currency=request.currency,
@@ -287,13 +332,22 @@ def create_cregis_crypto_deposit(
         # Prepare payment_info for response (with QR codes)
         response_payment_info = []
         for info in payment_info:
+            address_value = extract_address(info) or deposit_address
+            if not address_value:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Cregis payment info missing deposit address"
+                )
+            qr_value = info.get("qr_code") or info.get("payment_qr") or cregis_data.get("qr_code")
+            if not qr_value:
+                qr_value = _generate_qr_data_uri(address_value)
             response_payment_info.append(
                 PaymentInfoItem(
-                    currency=info.get("currency", request.currency),
-                    network=info.get("network", "TRC20"),
-                    address=info.get("address", deposit_address),
+                    currency=info.get("currency") or info.get("token") or info.get("token_name") or request.currency or settings.CREGIS_SETTLEMENT_CURRENCY,
+                    network=info.get("network", settings.CREGIS_SETTLEMENT_NETWORK),
+                    address=address_value,
                     amount=info.get("amount", request.amount),
-                    qr_code=info.get("qr_code")  # QR code is already in base64 from Cregis
+                    qr_code=qr_value  # Use provided QR or generated fallback
                 )
             )
         
@@ -557,4 +611,3 @@ def handle_cregis_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing callback: {str(e)}"
         )
-
