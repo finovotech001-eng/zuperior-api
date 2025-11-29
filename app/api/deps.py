@@ -170,3 +170,17 @@ def require_role(required_role: str):
         return current_user
     return role_checker
 
+
+def get_current_active_admin(
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """
+    Get current active admin user
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges"
+        )
+    return current_user
+

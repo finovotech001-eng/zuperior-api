@@ -809,10 +809,84 @@ class TicketReplyResponse(TicketReplyBase):
                 elif 'sender_id' in data:
                     data['userId'] = data['sender_id']
             
-            # Clean up SQLAlchemy internal attributes
-            data.pop('_sa_instance_state', None)
-            
             from types import SimpleNamespace
             temp_obj = SimpleNamespace(**data)
             return super().model_validate(temp_obj)
         return super().model_validate(obj)
+
+
+# ============ Country Schemas ============
+class CountryBase(BaseModel):
+    code: str = Field(..., min_length=2, max_length=2)
+    name: str
+    phoneCode: Optional[str] = None
+    currency: Optional[str] = None
+    region: Optional[str] = None
+    isActive: Optional[bool] = True
+
+
+class CountryCreate(CountryBase):
+    pass
+
+
+class CountryUpdate(BaseModel):
+    code: Optional[str] = Field(None, min_length=2, max_length=2)
+    name: Optional[str] = None
+    phoneCode: Optional[str] = None
+    currency: Optional[str] = None
+    region: Optional[str] = None
+    isActive: Optional[bool] = None
+
+
+class CountryResponse(CountryBase):
+    id: str
+    createdAt: datetime
+    updatedAt: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============ Group Management Schemas ============
+class GroupManagementBase(BaseModel):
+    group: str
+    dedicated_name: Optional[str] = None
+    account_type: Optional[str] = None
+    server: Optional[int] = 1
+    auth_mode: Optional[int] = 0
+    auth_password_min: Optional[int] = 8
+    currency: Optional[str] = None
+    leverage: Optional[int] = None
+    min_deposit: Optional[float] = None
+    spread: Optional[float] = None
+    commission: Optional[float] = None
+    is_active: Optional[bool] = True
+
+
+class GroupManagementCreate(GroupManagementBase):
+    pass
+
+
+class GroupManagementUpdate(BaseModel):
+    group: Optional[str] = None
+    dedicated_name: Optional[str] = None
+    account_type: Optional[str] = None
+    server: Optional[int] = None
+    auth_mode: Optional[int] = None
+    auth_password_min: Optional[int] = None
+    currency: Optional[str] = None
+    leverage: Optional[int] = None
+    min_deposit: Optional[float] = None
+    spread: Optional[float] = None
+    commission: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class GroupManagementResponse(GroupManagementBase):
+    id: int
+    synced_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+

@@ -16,7 +16,9 @@ from app.api.endpoints import (
     wallets,
     wallet_transactions,
     notifications,
-    tickets
+    tickets,
+    countries,
+    group_management
 )
 
 # Suppress noisy passlib bcrypt version warning (harmless)
@@ -145,6 +147,18 @@ app.include_router(
     tickets.router,
     prefix=f"{settings.API_V1_STR}/tickets",
     tags=["Tickets"]
+)
+
+app.include_router(
+    countries.router,
+    prefix=f"{settings.API_V1_STR}/countries",
+    tags=["Countries"]
+)
+
+app.include_router(
+    group_management.router,
+    prefix=f"{settings.API_V1_STR}/group-management",
+    tags=["Group Management"]
 )
 
 

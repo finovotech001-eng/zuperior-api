@@ -474,3 +474,39 @@ class TicketReply(Base):
     @userId.setter
     def userId(self, value):
         self.senderId = value
+
+
+class Country(Base):
+    __tablename__ = "Country"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    code = Column(String(2), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    phoneCode = Column("phoneCode", String(10), nullable=True)
+    currency = Column(String(3), nullable=True)
+    region = Column(String(50), nullable=True)
+    isActive = Column("isActive", Boolean, default=True, index=True)
+    createdAt = Column("createdAt", DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column("updatedAt", DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class GroupManagement(Base):
+    __tablename__ = "group_management"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group = Column(String(255), unique=True, nullable=False, index=True)
+    dedicated_name = Column(String(255), nullable=True)
+    account_type = Column(String(10), nullable=True, index=True)  # "Live" or "Demo"
+    server = Column(Integer, default=1, index=True)
+    auth_mode = Column(Integer, default=0)
+    auth_password_min = Column(Integer, default=8)
+    currency = Column(String(10), nullable=True)
+    leverage = Column(Integer, nullable=True)
+    min_deposit = Column(Float, nullable=True)  # Decimal in DB, mapped to Float
+    spread = Column(Float, nullable=True)  # Decimal in DB, mapped to Float
+    commission = Column(Float, nullable=True)  # Decimal in DB, mapped to Float
+    is_active = Column(Boolean, default=True, index=True)
+    synced_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+

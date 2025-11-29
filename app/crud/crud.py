@@ -137,7 +137,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 from app.models.models import (
     User, KYC, MT5Account, MT5Transaction, 
     Deposit, Withdrawal, PaymentMethod, Account, Transaction,
-    Wallet, WalletTransaction, Notification, Ticket, TicketReply
+    Wallet, WalletTransaction, Notification, Ticket, TicketReply,
+    Country, GroupManagement
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate,
@@ -153,7 +154,9 @@ from app.schemas.schemas import (
     WalletTransactionCreate, WalletTransactionUpdate,
     NotificationCreate, NotificationUpdate,
     TicketCreate, TicketUpdate,
-    TicketReplyCreate, TicketReplyUpdate
+    TicketReplyCreate, TicketReplyUpdate,
+    CountryCreate, CountryUpdate,
+    GroupManagementCreate, GroupManagementUpdate
 )
 
 
@@ -518,6 +521,30 @@ class TicketReplyCRUD(CRUDBase[TicketReply, TicketReplyCreate, TicketReplyUpdate
         return db_obj
 
 
+class CountryCRUD(CRUDBase[Country, CountryCreate, CountryUpdate]):
+    def get_by_code(self, db: Session, code: str) -> Optional[Country]:
+        """Get country by code"""
+        return db.query(self.model).filter(self.model.code == code).first()
+
+
+class GroupManagementCRUD(CRUDBase[GroupManagement, GroupManagementCreate, GroupManagementUpdate]):
+    def get_by_id(self, db: Session, id: int) -> Optional[GroupManagement]:
+        """Get a single record by ID (overridden for integer IDs)"""
+        return db.query(self.model).filter(self.model.id == id).first()
+
+    def get_by_group(self, db: Session, group: str) -> Optional[GroupManagement]:
+        """Get group by group name"""
+        return db.query(self.model).filter(self.model.group == group).first()
+    
+    def delete(self, db: Session, *, id: int) -> Optional[GroupManagement]:
+        """Delete a record by ID (overridden for integer IDs)"""
+        obj = db.query(self.model).filter(self.model.id == id).first()
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
+
+
 # Instantiate CRUD objects
 user_crud = UserCRUD(User)
 kyc_crud = KYCCRUD(KYC)
@@ -533,3 +560,5 @@ wallet_transaction_crud = WalletTransactionCRUD(WalletTransaction)
 notification_crud = NotificationCRUD(Notification)
 ticket_crud = TicketCRUD(Ticket)
 ticket_reply_crud = TicketReplyCRUD(TicketReply)
+country_crud = CountryCRUD(Country)
+group_management_crud = GroupManagementCRUD(GroupManagement)

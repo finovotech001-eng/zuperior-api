@@ -9,7 +9,7 @@ from app.schemas.schemas import (
     MT5AccountUpdate,
     PaginatedResponse
 )
-from app.crud.crud import mt5_account_crud
+from app.crud.crud import mt5_account_crud, group_management_crud
 from app.models.models import User
 
 router = APIRouter()
@@ -87,6 +87,15 @@ def create_mt5_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="MT5 account ID already exists"
         )
+        
+    # Validate package (group) if provided
+    if account_in.package:
+        group = group_management_crud.get_by_group(db, group=account_in.package)
+        if not group:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid package/group: {account_in.package}"
+            )
     
     account = mt5_account_crud.create(db, obj_in=account_in, userId=current_user.id)
     return account
@@ -115,6 +124,15 @@ def update_mt5_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this MT5 account"
         )
+        
+    # Validate package (group) if provided
+    if account_update.package:
+        group = group_management_crud.get_by_group(db, group=account_update.package)
+        if not group:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid package/group: {account_update.package}"
+            )
     
     updated_account = mt5_account_crud.update(db, db_obj=account, obj_in=account_update)
     return updated_account
@@ -145,4 +163,5 @@ def delete_mt5_account(
     
     mt5_account_crud.delete(db, id=account_id)
     return None
+
 
