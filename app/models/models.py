@@ -109,6 +109,13 @@ class MT5Account(Base):
     nameOnAccount = Column(String, nullable=True)
     package = Column(String, nullable=True)
     
+    # Cached balance fields
+    balance = Column(Float, default=0.0)
+    equity = Column(Float, default=0.0)
+    credit = Column(Float, default=0.0)
+    margin = Column(Float, default=0.0)
+    marginFree = Column(Float, default=0.0)
+    
     # Relationships
     defaultMT5Accounts = relationship("DefaultMT5Account", back_populates="mt5Account", cascade="all, delete-orphan")
     deposits = relationship("Deposit", back_populates="mt5Account", cascade="all, delete-orphan")

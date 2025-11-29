@@ -8,36 +8,35 @@ datasource db {
 }
 
 model User {
-  id                   String              @id @default(uuid())
-  clientId             String              @unique @default(cuid())
-  email                String              @unique
+  id                   String             @id @default(uuid())
+  clientId             String             @unique @default(cuid())
+  email                String             @unique
   password             String
   name                 String?
   phone                String?
   country              String?
-  createdAt            DateTime            @default(now())
-  emailVerified        Boolean             @default(false)
+  createdAt            DateTime           @default(now())
+  emailVerified        Boolean            @default(false)
   lastLoginAt          DateTime?
-  role                 String              @default("user")
-  status               String              @default("active")
-  twoFactorEnabled     Boolean             @default(false)
+  role                 String             @default("user")
+  status               String             @default("active")
+  twoFactorEnabled     Boolean            @default(false)
   twoFactorSecret      String?
-  twoFactorBackupCodes String[]            @default([])
+  twoFactorBackupCodes String[]           @default([])
   resetToken           String?
   resetTokenExpires    DateTime?
-  accounts             Account[]           @relation("accounts")
-  activityLogs         ActivityLog[]       @relation("activityLogs")
+  accounts             Account[]          @relation("accounts")
+  activityLogs         ActivityLog[]      @relation("activityLogs")
   DefaultMT5Account    DefaultMT5Account?
-  deposits             Deposit[]           @relation("deposits")
-  kyc                  KYC?                @relation("kyc")
-  mt5Accounts          MT5Account[]        @relation("mt5Accounts")
+  deposits             Deposit[]          @relation("deposits")
+  kyc                  KYC?               @relation("kyc")
+  mt5Accounts          MT5Account[]       @relation("mt5Accounts")
+  notifications        Notification[]     @relation("notifications")
   RefreshToken         RefreshToken[]
   UserFavorite         UserFavorite[]
-  withdrawals          Withdrawal[]        @relation("withdrawals")
-  userLoginLogs        UserLoginLog[]      @relation("userLoginLogs")
-  wallet               Wallet?
-  walletTransactions   WalletTransaction[] @relation("walletUserTransactions")
-  notifications        Notification[]      @relation("notifications")
+  userLoginLogs        UserLoginLog[]     @relation("userLoginLogs")
+
+  @@index([resetToken], map: "idx_user_reset_token")
 }
 
 model KYC {
@@ -70,9 +69,19 @@ model MT5Account {
   package           String?
   DefaultMT5Account DefaultMT5Account[]
   deposits          Deposit[]           @relation("deposits")
-  withdrawals       Withdrawal[]        @relation("withdrawals")
   user              User?               @relation("mt5Accounts", fields: [userId], references: [id])
   mt5Transactions   MT5Transaction[]    @relation("mt5Transactions")
+  
+  // Cached balance fields for faster loading
+  balance           Float?              @default(0)
+  equity            Float?              @default(0)
+  credit            Float?              @default(0)
+  margin            Float?              @default(0)
+  marginFree        Float?              @default(0)
+  marginLevel       Float?              @default(0)
+  profit            Float?              @default(0)
+  currency          String?             @default("USD")
+  lastSyncedAt      DateTime?
 }
 
 model MT5Transaction {
@@ -144,64 +153,56 @@ model Deposit {
 }
 
 model Withdrawal {
-  id                    String      @id @default(uuid())
+  id                    String    @id @default(dbgenerated("gen_random_uuid()"))
   userId                String
-  mt5AccountId          String? // Optional - wallet withdrawals won't have this
   amount                Float
   method                String
   bankDetails           String?
   cryptoAddress         String?
-  status                String      @default("pending")
+  status                String    @default("pending")
   rejectionReason       String?
   approvedBy            String?
   approvedAt            DateTime?
   rejectedAt            DateTime?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  currency              String      @default("USD")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+  currency              String    @default("USD")
   externalTransactionId String?
   paymentMethod         String?
   processedAt           DateTime?
   walletAddress         String?
-  user                  User        @relation("withdrawals", fields: [userId], references: [id])
-  mt5Account            MT5Account? @relation("withdrawals", fields: [mt5AccountId], references: [id])
   walletId              String?
-  wallet                Wallet?     @relation(fields: [walletId], references: [id])
+  mt5AccountId          String?
 
   @@index([userId])
   @@index([mt5AccountId])
   @@index([status])
   @@index([createdAt])
+  @@index([walletId])
 }
 
-// New wallet models to support user wallet and transactions
 model Wallet {
-  id           String              @id @default(uuid())
-  userId       String              @unique
-  balance      Float               @default(0)
-  walletNumber String?             @unique
-  currency     String              @default("USD")
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  user         User                @relation(fields: [userId], references: [id])
-  withdrawals  Withdrawal[]
-  transactions WalletTransaction[]
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  balance      Float    @default(0)
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  walletNumber String?  @default(dbgenerated("('ZUP'::text || (floor(((random() * (9000000)::double precision) + (1000000)::double precision)))::text)"))
 }
 
 model WalletTransaction {
   id           String   @id @default(uuid())
   walletId     String
   userId       String
-  type         String // e.g., MT5_TO_WALLET, WALLET_WITHDRAWAL
+  type         String
   amount       Float
   status       String   @default("completed")
   description  String?
   mt5AccountId String?
   withdrawalId String?
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  wallet       Wallet   @relation(fields: [walletId], references: [id])
-  user         User     @relation("walletUserTransactions", fields: [userId], references: [id])
+  updatedAt    DateTime @default(now()) @updatedAt
 
   @@index([walletId])
   @@index([userId])
@@ -244,23 +245,11 @@ model Role {
 }
 
 model PaymentMethod {
-  id       String  @id @default(uuid())
-  userId   String
-  // For crypto methods
-  address  String?
-  currency String  @default("USDT")
-  network  String  @default("TRC20")
-
-  // Type of method: 'crypto' or 'bank'
-  methodType String @default("crypto")
-
-  // Bank fields (nullable for crypto methods)
-  bankName      String?
-  accountName   String?
-  accountNumber String?
-  ifscSwiftCode String?
-  accountType   String?
-
+  id              String    @id @default(uuid())
+  userId          String
+  address         String?
+  currency        String    @default("USDT")
+  network         String    @default("TRC20")
   status          String    @default("pending")
   submittedAt     DateTime  @default(now())
   approvedAt      DateTime?
@@ -268,6 +257,12 @@ model PaymentMethod {
   rejectionReason String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  methodType      String    @default("crypto")
+  bankName        String?
+  accountName     String?
+  accountNumber   String?
+  ifscSwiftCode   String?
+  accountType     String?
 
   @@index([userId])
   @@index([status])
@@ -321,9 +316,9 @@ model RefreshToken {
   expiresAt    DateTime  @db.Timestamptz(6)
   createdAt    DateTime? @default(now()) @db.Timestamptz(6)
   revoked      Boolean?
-  deviceName   String?   @db.VarChar
-  ipAddress    String?   @db.VarChar
-  userAgent    String?   @db.VarChar
+  deviceName   String?   @db.VarChar(255)
+  ipAddress    String?   @db.VarChar(255)
+  userAgent    String?   @db.VarChar(255)
   lastActivity DateTime? @default(now()) @db.Timestamptz(6)
   User         User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -477,6 +472,10 @@ model group_commission_structures {
   is_active               Boolean   @default(true)
   created_at              DateTime? @default(now()) @db.Timestamptz(6)
   updated_at              DateTime? @default(now()) @db.Timestamptz(6)
+  level_order             Int       @default(1)
+  min_trading_volume      Decimal?  @default(0) @db.Decimal(15, 2)
+  max_trading_volume      Decimal?  @db.Decimal(15, 2)
+  min_active_clients      Int?      @default(0)
 
   @@unique([group_id, structure_name])
 }
@@ -501,7 +500,7 @@ model ib_requests {
   email                     String                 @unique @db.VarChar(255)
   password_hash             String                 @db.VarChar(255)
   status                    String                 @default("pending") @db.VarChar(50)
-  ib_type                   String                 @default("common") @db.VarChar(50)
+  ib_type                   String                 @default("common") @db.VarChar(255)
   submitted_at              DateTime?              @default(now()) @db.Timestamptz(6)
   approved_at               DateTime?              @db.Timestamptz(6)
   usd_per_lot               Decimal?               @db.Decimal(10, 2)
@@ -511,44 +510,69 @@ model ib_requests {
   structure_id              Int?
   created_at                DateTime?              @default(now()) @db.Timestamptz(6)
   updated_at                DateTime?              @default(now()) @db.Timestamptz(6)
+  referral_code             String?                @unique @db.VarChar(8)
+  referred_by               Int?
+  country                   String?                @db.VarChar(100)
   ib_group_assignments      ib_group_assignments[]
+
+  @@index([referral_code], map: "idx_ib_requests_referral_code")
+  @@index([referred_by], map: "idx_ib_requests_referred_by")
 }
 
 model manual_gateway {
-  id          Int      @id @default(autoincrement())
-  type        String   @db.VarChar(50)
-  name        String   @db.VarChar(255)
-  details     String
-  icon_url    String?  @db.VarChar(500)
-  qr_code_url String?  @db.VarChar(500)
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @db.Timestamptz(6)
-
-  // Optional fields present in database but missing previously
-  // These enable bank/UPI/crypto manual details to be returned directly via Prisma
-  vpa_address    String? @db.VarChar(255)
-  crypto_address String? @db.VarChar(255)
-  bank_name      String? @db.VarChar(255)
-  account_name   String? @db.VarChar(255)
-  account_number String? @db.VarChar(255)
-  ifsc_code      String? @db.VarChar(50)
-  swift_code     String? @db.VarChar(50)
-  account_type   String? @db.VarChar(50)
-  country_code   String? @db.VarChar(2)
+  id             Int      @id @default(autoincrement())
+  type           String   @db.VarChar(50)
+  name           String   @db.VarChar(255)
+  details        String
+  icon_url       String?  @db.VarChar(500)
+  qr_code_url    String?  @db.VarChar(500)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @db.Timestamptz(6)
+  vpa_address    String?  @db.VarChar(255)
+  crypto_address String?  @db.VarChar(255)
+  bank_name      String?  @db.VarChar(255)
+  account_name   String?  @db.VarChar(255)
+  account_number String?  @db.VarChar(255)
+  ifsc_code      String?  @db.VarChar(50)
+  swift_code     String?  @db.VarChar(50)
+  account_type   String?  @db.VarChar(50)
+  country_code   String?  @db.VarChar(2)
 
   @@index([is_active])
   @@index([type])
 }
 
 model mt5_groups {
-  id          Int       @id @default(autoincrement())
-  group_id    String    @unique @db.VarChar(255)
-  name        String    @db.VarChar(255)
-  description String?
-  synced_at   DateTime? @default(now()) @db.Timestamptz(6)
-  created_at  DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+  id                  Int       @id @default(autoincrement())
+  group_id            String    @unique @db.VarChar(255)
+  name                String    @db.VarChar(255)
+  description         String?
+  synced_at           DateTime? @default(now()) @db.Timestamptz(6)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+  server              Int?      @default(1)
+  company             String?   @db.VarChar(255)
+  currency            Int?      @default(0)
+  currency_digits     Int?      @default(2)
+  margin_call         Decimal?  @default(100.00) @db.Decimal(5, 2)
+  stop_out            Decimal?  @default(50.00) @db.Decimal(5, 2)
+  trade_flags         Int?      @default(16)
+  auth_mode           Int?      @default(0)
+  min_password_chars  Int?      @default(8)
+  website             String?   @db.VarChar(255)
+  email               String?   @db.VarChar(255)
+  support_page        String?   @db.VarChar(255)
+  support_email       String?   @db.VarChar(255)
+  reports_mode        Int?      @default(1)
+  margin_mode         Int?      @default(2)
+  demo_leverage       Int?      @default(0)
+  news_mode           Int?      @default(2)
+  margin_free_mode    Int?      @default(1)
+  demo_deposit        Decimal?  @default(0.00) @db.Decimal(10, 2)
+  mail_mode           Int?      @default(1)
+  margin_so_mode      Int?      @default(0)
+  trade_transfer_mode Int?      @default(0)
 }
 
 model payment_gateway {
@@ -632,7 +656,7 @@ model support_tickets {
   ticket_no      String    @unique @db.VarChar(50)
   parent_id      String    @db.VarChar(255)
   title          String    @db.VarChar(500)
-  description    String?   @db.Text
+  description    String?
   ticket_type    String?   @db.VarChar(100)
   status         String    @default("New") @db.VarChar(50)
   priority       String    @default("normal") @db.VarChar(20)
@@ -654,13 +678,13 @@ model support_tickets {
 model support_ticket_replies {
   id          Int      @id @default(autoincrement())
   ticket_id   Int
-  reply_id    Int? // For nested replies
+  reply_id    Int?
   sender_id   String   @db.VarChar(255)
   sender_name String   @db.VarChar(255)
-  sender_type String   @db.VarChar(20) // user, admin, system
-  content     String   @db.Text
-  is_internal Boolean  @default(false) // Internal notes visible only to admins
-  attachments String[] @default([]) // Array of file URLs
+  sender_type String   @db.VarChar(20)
+  content     String
+  is_internal Boolean  @default(false)
+  attachments String[] @default([])
   created_at  DateTime @default(now()) @db.Timestamptz(6)
   updated_at  DateTime @default(now()) @db.Timestamptz(6)
   is_read     Boolean  @default(false)
@@ -674,7 +698,7 @@ model support_articles {
   id                Int       @id @default(autoincrement())
   title             String    @db.VarChar(500)
   slug              String    @unique @db.VarChar(500)
-  content           String    @db.Text
+  content           String
   excerpt           String?   @db.VarChar(1000)
   category          String    @db.VarChar(100)
   tags              String[]
@@ -696,7 +720,7 @@ model support_articles {
 model support_faq {
   id                Int      @id @default(autoincrement())
   question          String   @db.VarChar(500)
-  answer            String   @db.Text
+  answer            String
   category          String   @db.VarChar(100)
   tags              String[]
   helpful_count     Int      @default(0)
@@ -732,7 +756,7 @@ model support_replies {
   sender_id   String   @db.VarChar(255)
   sender_name String   @db.VarChar(255)
   sender_type String   @db.VarChar(20)
-  content     String   @db.Text
+  content     String
   is_internal Boolean  @default(false)
   created_at  DateTime @default(now()) @db.Timestamptz(6)
 
@@ -742,11 +766,11 @@ model support_replies {
 model Notification {
   id        String    @id @default(uuid())
   userId    String    @map("userId")
-  type      String    @db.VarChar(50) // deposit, withdrawal, internal_transfer, account_creation, account_update, support_ticket_reply
+  type      String    @db.VarChar(50)
   title     String    @db.VarChar(255)
-  message   String    @db.Text
+  message   String
   isRead    Boolean   @default(false) @map("isRead")
-  metadata  Json? // Additional data like accountId, amount, etc.
+  metadata  Json?
   createdAt DateTime  @default(now()) @map("createdAt") @db.Timestamptz(6)
   readAt    DateTime? @map("readAt") @db.Timestamptz(6)
   user      User      @relation("notifications", fields: [userId], references: [id], onDelete: Cascade)
@@ -761,20 +785,20 @@ model Notification {
 model group_management {
   id                Int       @id @default(autoincrement())
   group             String    @unique @db.VarChar(255)
-  dedicated_name    String?   @db.VarChar(255)
-  account_type      String?   @db.VarChar(10) // "Live" or "Demo" (extracted from group column)
   server            Int?      @default(1)
   auth_mode         Int?      @default(0)
   auth_password_min Int?      @default(8)
   currency          String?   @db.VarChar(10)
-  leverage          Int? // Raw leverage value (e.g., 2000 for "1:2000" or null for "1:Unlimited")
-  min_deposit       Decimal?  @db.Decimal(10, 2) // Minimum deposit amount (raw number, e.g., 10.00)
-  spread            Decimal?  @db.Decimal(5, 2) // Spread value in pips (raw number, e.g., 0.3)
-  commission        Decimal?  @db.Decimal(5, 2) // Commission percentage (raw number, e.g., 15.00)
-  is_active         Boolean   @default(true)
-  synced_at         DateTime? @default(now()) @db.Timestamptz(6)
+  is_active         Boolean?  @default(true)
+  synced_at         DateTime? @db.Timestamptz(6)
   created_at        DateTime? @default(now()) @db.Timestamptz(6)
   updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  dedicated_name    String?   @db.VarChar(255)
+  account_type      String?   @db.VarChar(10)
+  leverage          Int?
+  min_deposit       Decimal?  @db.Decimal(10, 2)
+  spread            Decimal?  @db.Decimal(5, 2)
+  commission        Decimal?  @db.Decimal(5, 2)
 
   @@index([group])
   @@index([is_active])
@@ -782,17 +806,287 @@ model group_management {
   @@index([account_type])
 }
 
-model Country {
-  id        String   @id @default(uuid())
-  code      String   @unique @db.VarChar(2)
-  name      String   @db.VarChar(100)
-  phoneCode String?  @db.VarChar(10)
-  currency  String?  @db.VarChar(3)
-  region    String?  @db.VarChar(50)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+model Transaction {
+  id            String   @id
+  userId        String
+  type          String
+  amount        Float
+  status        String   @default("pending")
+  currency      String   @default("USD")
+  paymentMethod String?
+  transactionId String?
+  description   String?
+  metadata      String?
+  depositId     String?
+  withdrawalId  String?
+  updatedAt     DateTime
+  createdAt     DateTime @default(now())
 
-  @@index([code])
-  @@index([isActive])
+  @@index([depositId])
+  @@index([status])
+  @@index([type])
+  @@index([userId])
+  @@index([withdrawalId])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admin_transactions {
+  id                      BigInt   @id @default(autoincrement())
+  admin_id                Int
+  user_id                 String?  @db.VarChar(255)
+  mt5_account_id          String?  @db.VarChar(255)
+  mt5_login               String   @db.VarChar(64)
+  operation_type          String   @db.VarChar(20)
+  amount                  Decimal  @db.Decimal(18, 2)
+  currency                String   @default("USD") @db.VarChar(10)
+  status                  String   @default("completed") @db.VarChar(20)
+  comment                 String?
+  external_transaction_id String?
+  ip_address              String?  @db.VarChar(45)
+  user_agent              String?
+  error_message           String?
+  created_at              DateTime @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([admin_id], map: "idx_admin_tx_admin")
+  @@index([created_at(sort: Desc)], map: "idx_admin_tx_created_at")
+  @@index([external_transaction_id], map: "idx_admin_tx_ext_tx")
+  @@index([mt5_login], map: "idx_admin_tx_mt5_login")
+  @@index([operation_type, status], map: "idx_admin_tx_op_status")
+  @@index([user_id], map: "idx_admin_tx_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model countries {
+  code         String  @id @db.VarChar(2)
+  country      String? @db.VarChar(100)
+  country_code String? @db.VarChar(6)
+}
+
+model country_admins {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(150)
+  status       String?   @default("inactive") @db.VarChar(50)
+  country_code String?   @db.VarChar(2)
+  features     String?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model email_templates {
+  id                Int       @id @default(autoincrement())
+  name              String    @unique @db.VarChar(255)
+  description       String?
+  html_code         String
+  variables         String[]  @default([])
+  is_default        Boolean?  @default(false)
+  preview_image_url String?   @db.VarChar(500)
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+  created_by        String?   @db.VarChar(255)
+
+  @@index([created_at], map: "idx_email_templates_created_at")
+  @@index([created_by], map: "idx_email_templates_created_by")
+  @@index([is_default], map: "idx_email_templates_is_default")
+  @@index([name], map: "idx_email_templates_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ib_client_linking {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int
+  user_name          String    @db.VarChar(255)
+  user_email         String    @db.VarChar(255)
+  user_account_id    String?
+  current_ib_id      Int?
+  current_ib_name    String?   @db.VarChar(255)
+  current_ib_code    String?   @db.VarChar(100)
+  assigned_ib_id     Int
+  assigned_ib_name   String    @db.VarChar(255)
+  assigned_ib_code   String?   @db.VarChar(100)
+  assigned_ib_email  String?   @db.VarChar(255)
+  status             String?   @default("active") @db.VarChar(20)
+  direct_volume_lots Decimal?  @default(0.00) @db.Decimal(15, 2)
+  direct_commission  Decimal?  @default(0.00) @db.Decimal(15, 2)
+  linked_at          DateTime? @default(now()) @db.Timestamptz(6)
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime? @default(now()) @db.Timestamptz(6)
+  created_by         Int?
+
+  @@unique([user_id, assigned_ib_id, status])
+  @@index([assigned_ib_id], map: "idx_ib_client_linking_assigned_ib_id")
+  @@index([status], map: "idx_ib_client_linking_status")
+  @@index([user_id], map: "idx_ib_client_linking_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ib_client_linking_history {
+  id            Int       @id @default(autoincrement())
+  linking_id    Int?
+  user_id       Int
+  user_name     String    @db.VarChar(255)
+  user_email    String    @db.VarChar(255)
+  from_ib_id    Int?
+  from_ib_name  String?   @db.VarChar(255)
+  from_ib_code  String?   @db.VarChar(100)
+  to_ib_id      Int
+  to_ib_name    String    @db.VarChar(255)
+  to_ib_code    String?   @db.VarChar(100)
+  action        String    @db.VarChar(20)
+  moved_by      Int?
+  moved_by_name String?   @db.VarChar(255)
+  notes         String?
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)], map: "idx_ib_client_linking_history_created_at")
+  @@index([linking_id], map: "idx_ib_client_linking_history_linking_id")
+  @@index([user_id], map: "idx_ib_client_linking_history_user_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ib_commission {
+  id                Int       @id @default(autoincrement())
+  ib_request_id     Int
+  user_id           String
+  total_commission  Decimal?  @default(0) @db.Decimal(15, 2)
+  last_updated      DateTime? @default(now()) @db.Timestamptz(6)
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  total_trades      Int?      @default(0)
+  total_lots        Decimal?  @default(0) @db.Decimal(15, 2)
+  fixed_commission  Decimal?  @default(0) @db.Decimal(15, 2)
+  spread_commission Decimal?  @default(0) @db.Decimal(15, 2)
+
+  @@unique([ib_request_id, user_id])
+  @@index([ib_request_id], map: "idx_ib_commission_ib_request")
+  @@index([last_updated], map: "idx_ib_commission_updated")
+  @@index([user_id], map: "idx_ib_commission_user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ib_level_up_history {
+  id                        Int       @id @default(autoincrement())
+  ib_request_id             Int
+  from_structure_id         Int?
+  to_structure_id           Int
+  from_structure_name       String?   @db.VarChar(255)
+  to_structure_name         String?   @db.VarChar(255)
+  trading_volume_at_upgrade Decimal?  @db.Decimal(15, 2)
+  active_clients_at_upgrade Int?
+  upgraded_at               DateTime? @default(now()) @db.Timestamptz(6)
+  created_at                DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([ib_request_id], map: "idx_ib_level_up_history_ib_request_id")
+  @@index([upgraded_at(sort: Desc)], map: "idx_ib_level_up_history_upgraded_at")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model ib_referrals {
+  id            Int       @id @default(autoincrement())
+  ib_request_id Int
+  user_id       String?
+  email         String
+  referral_code String    @db.VarChar(16)
+  source        String?   @default("crm")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([referral_code], map: "ix_ib_referrals_code")
+  @@index([ib_request_id], map: "ix_ib_referrals_ib")
+  @@index([user_id], map: "ix_ib_referrals_user")
+}
+
+model ib_reward_claims {
+  id                           Int       @id @default(autoincrement())
+  ib_request_id                Int
+  user_id                      String    @db.VarChar(255)
+  reward_id                    Int
+  reward_value                 String    @db.VarChar(50)
+  reward_description           String    @db.VarChar(255)
+  reward_type                  String    @db.VarChar(50)
+  claimant_name                String    @db.VarChar(255)
+  claimant_phone               String    @db.VarChar(50)
+  claimant_email               String    @db.VarChar(255)
+  claimant_address_street      String?
+  claimant_address_city        String?   @db.VarChar(100)
+  claimant_address_state       String?   @db.VarChar(100)
+  claimant_address_country     String?   @db.VarChar(100)
+  claimant_address_postal_code String?   @db.VarChar(50)
+  status                       String    @default("pending") @db.VarChar(50)
+  total_volume_mln             Decimal   @db.Decimal(15, 2)
+  admin_notes                  String?
+  claimed_at                   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime? @default(now()) @db.Timestamptz(6)
+  created_at                   DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([ib_request_id, reward_id])
+  @@index([claimed_at], map: "idx_ib_reward_claims_claimed_at")
+  @@index([ib_request_id], map: "idx_ib_reward_claims_ib_request")
+  @@index([reward_id], map: "idx_ib_reward_claims_reward_id")
+  @@index([status], map: "idx_ib_reward_claims_status")
+  @@index([user_id], map: "idx_ib_reward_claims_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ib_withdrawal_requests {
+  id              Int       @id @default(autoincrement())
+  ib_request_id   Int
+  amount          Decimal   @db.Decimal
+  method          String
+  account_details String?
+  status          String    @default("pending")
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([ib_request_id], map: "idx_ib_withdrawal_ib")
+  @@index([status], map: "idx_ib_withdrawal_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model sent_emails {
+  id                Int       @id @default(autoincrement())
+  recipient_email   String    @db.VarChar(255)
+  recipient_name    String?   @db.VarChar(255)
+  subject           String
+  content_body      String
+  is_html           Boolean?  @default(true)
+  recipient_type    String?   @db.VarChar(50)
+  status            String?   @default("pending") @db.VarChar(20)
+  error_message     String?
+  sent_at           DateTime? @db.Timestamp(6)
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+  admin_id          String?   @db.VarChar(255)
+  attachments_count Int?      @default(0)
+
+  @@index([admin_id], map: "idx_sent_emails_admin_id")
+  @@index([created_at], map: "idx_sent_emails_created_at")
+  @@index([recipient_email], map: "idx_sent_emails_recipient_email")
+  @@index([recipient_type], map: "idx_sent_emails_recipient_type")
+  @@index([sent_at], map: "idx_sent_emails_sent_at")
+  @@index([status], map: "idx_sent_emails_status")
+}
+
+model symbols_with_categories {
+  id            Int       @id @default(autoincrement())
+  symbol        String    @unique @db.VarChar(100)
+  pair          String?   @db.VarChar(50)
+  group_name    String?   @db.VarChar(100)
+  category      String?   @db.VarChar(100)
+  pip_per_lot   Decimal?  @default(1.00) @db.Decimal(10, 2)
+  pip_value     Decimal?  @db.Decimal(15, 2)
+  commission    Decimal?  @db.Decimal(15, 2)
+  currency      String?   @default("USD") @db.VarChar(10)
+  status        String?   @default("active") @db.VarChar(20)
+  contract_size Int?      @default(100000)
+  digits        Int?      @default(5)
+  spread        Decimal?  @db.Decimal(10, 6)
+  profit_mode   String?   @default("forex") @db.VarChar(20)
+  is_override   Boolean?  @default(false)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([category], map: "idx_symbols_category")
+  @@index([group_name], map: "idx_symbols_group")
+  @@index([status], map: "idx_symbols_status")
+  @@index([symbol], map: "idx_symbols_symbol")
 }

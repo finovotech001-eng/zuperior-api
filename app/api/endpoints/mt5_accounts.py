@@ -23,20 +23,33 @@ def list_mt5_accounts(
     per_page: int = Query(20, ge=1, le=100),
     sort_by: Optional[str] = Query(None),
     order: str = Query("desc", regex="^(asc|desc)$"),
-    search: Optional[str] = Query(None)
+    search: Optional[str] = Query(None),
+    group: Optional[str] = Query(None)
 ):
     """
-    List MT5 accounts for current user with pagination
+    List MT5 accounts with pagination
+    - Admins can see all accounts
+    - Users can only see their own accounts
     """
+    filters = {}
+    if group:
+        filters["package"] = group
+
+    # If user is not admin, restrict to their own accounts
+    user_id = None
+    if current_user.role != "admin":
+        user_id = current_user.id
+        
     result = mt5_account_crud.get_multi(
         db,
         page=page,
         per_page=per_page,
         sort_by=sort_by,
         order=order,
+        filters=filters,
         search=search,
-        search_fields=["accountId"],
-        user_id=current_user.id
+        search_fields=["accountId", "nameOnAccount"],
+        user_id=user_id
     )
     
     # Convert SQLAlchemy objects to Pydantic models
@@ -62,7 +75,8 @@ def get_mt5_account(
             detail="MT5 account not found"
         )
     
-    if account.userId != current_user.id:
+    # Allow access if user is admin OR if the account belongs to the user
+    if current_user.role != "admin" and account.userId != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this MT5 account"
@@ -97,6 +111,9 @@ def create_mt5_account(
                 detail=f"Invalid package/group: {account_in.package}"
             )
     
+    # If admin creates account, they can specify userId, otherwise use current_user.id
+    # For now, we assume admin is creating for themselves or we might need to add userId to MT5AccountCreate schema
+    # But based on current schema, we'll just use current_user.id
     account = mt5_account_crud.create(db, obj_in=account_in, userId=current_user.id)
     return account
 
@@ -119,7 +136,8 @@ def update_mt5_account(
             detail="MT5 account not found"
         )
     
-    if account.userId != current_user.id:
+    # Allow update if user is admin OR if the account belongs to the user
+    if current_user.role != "admin" and account.userId != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this MT5 account"
@@ -155,7 +173,8 @@ def delete_mt5_account(
             detail="MT5 account not found"
         )
     
-    if account.userId != current_user.id:
+    # Allow delete if user is admin OR if the account belongs to the user
+    if current_user.role != "admin" and account.userId != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this MT5 account"

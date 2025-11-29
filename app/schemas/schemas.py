@@ -166,6 +166,11 @@ class MT5AccountResponse(MT5AccountBase):
     leverage: Optional[int] = None
     nameOnAccount: Optional[str] = None
     package: Optional[str] = None
+    balance: Optional[float] = 0.0
+    equity: Optional[float] = 0.0
+    credit: Optional[float] = 0.0
+    margin: Optional[float] = 0.0
+    marginFree: Optional[float] = 0.0
     createdAt: datetime
     updatedAt: datetime
     
